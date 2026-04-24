@@ -1,0 +1,247 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand-orange: #FF5500;
+  --brand-orange-dark: #E04A00;
+  --brand-navy: #0A1628;
+  --brand-navy-light: #112040;
+  --font-syne: 'Syne', sans-serif;
+  --font-jakarta: 'Plus Jakarta Sans', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-jakarta);
+  background-color: #F8FAFD;
+  color: var(--brand-navy);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--brand-orange);
+  border-radius: 3px;
+}
+
+/* Syne font utility */
+.font-syne {
+  font-family: var(--font-syne);
+}
+
+/* Orange gradient button */
+.btn-primary {
+  background: var(--brand-orange);
+  color: white;
+  font-family: var(--font-syne);
+  font-weight: 600;
+  padding: 0.875rem 2rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  border: none;
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+}
+
+.btn-primary:hover {
+  background: var(--brand-orange-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(255, 85, 0, 0.3);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--brand-navy);
+  font-family: var(--font-syne);
+  font-weight: 600;
+  padding: 0.875rem 2rem;
+  border-radius: 6px;
+  border: 2px solid var(--brand-navy);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.btn-secondary:hover {
+  background: var(--brand-navy);
+  color: white;
+}
+
+/* Card styles */
+.card {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #E8EDF5;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.card:hover {
+  border-color: var(--brand-orange);
+  box-shadow: 0 4px 20px rgba(255, 85, 0, 0.1);
+}
+
+/* Input styles */
+.input-field {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1.5px solid #E0E7EF;
+  border-radius: 8px;
+  font-family: var(--font-jakarta);
+  font-size: 0.95rem;
+  color: var(--brand-navy);
+  background: white;
+  transition: border-color 0.2s;
+  outline: none;
+}
+
+.input-field:focus {
+  border-color: var(--brand-orange);
+  box-shadow: 0 0 0 3px rgba(255, 85, 0, 0.08);
+}
+
+.input-field::placeholder {
+  color: #9CA8BC;
+}
+
+/* Label */
+.input-label {
+  display: block;
+  font-family: var(--font-syne);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--brand-navy);
+  margin-bottom: 0.4rem;
+  letter-spacing: 0.02em;
+}
+
+/* Section headers */
+.section-tag {
+  display: inline-block;
+  background: rgba(255, 85, 0, 0.1);
+  color: var(--brand-orange);
+  font-family: var(--font-syne);
+  font-weight: 700;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  margin-bottom: 1rem;
+}
+
+/* Step indicator */
+.step-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+.step-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-syne);
+  font-weight: 700;
+  font-size: 0.8rem;
+  transition: all 0.3s ease;
+}
+
+.step-dot.active {
+  background: var(--brand-orange);
+  color: white;
+}
+
+.step-dot.completed {
+  background: #10B981;
+  color: white;
+}
+
+.step-dot.inactive {
+  background: #E8EDF5;
+  color: #9CA8BC;
+}
+
+.step-line {
+  flex: 1;
+  height: 2px;
+  background: #E8EDF5;
+  max-width: 60px;
+}
+
+.step-line.completed {
+  background: #10B981;
+}
+
+/* Toast notification */
+.toast {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  background: var(--brand-navy);
+  color: white;
+  padding: 1rem 1.5rem;
+  border-radius: 10px;
+  font-family: var(--font-syne);
+  font-weight: 500;
+  z-index: 9999;
+  animation: slideInRight 0.3s ease forwards;
+  box-shadow: 0 8px 30px rgba(10, 22, 40, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Door card selected state */
+.door-card-selected {
+  border: 2px solid var(--brand-orange) !important;
+  box-shadow: 0 4px 24px rgba(255, 85, 0, 0.18) !important;
+}
+
+/* Cart bar */
+.cart-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--brand-navy);
+  color: white;
+  padding: 1rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 100;
+  box-shadow: 0 -4px 20px rgba(10, 22, 40, 0.2);
+}
+
+/* Invoice print styles */
+@media print {
+  .no-print { display: none !important; }
+  body { background: white; }
+}
