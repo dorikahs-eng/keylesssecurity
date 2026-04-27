@@ -1,104 +1,83 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import Navbar from '@/components/Navbar';
-import { Calendar, Clock, CheckCircle, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 
-const TIME_SLOTS = [
-  '8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM',
-  '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM',
-];
-
-function getDaysInMonth(year: number, month: number) {
-  return new Date(year, month + 1, 0).getDate();
-}
-function getFirstDayOfMonth(year: number, month: number) {
-  return new Date(year, month, 1).getDay();
-}
-
-export default function BookingPage() {
-  const router = useRouter();
+function BookingContent() {
+  const searchParams = useSearchParams();
   const [order, setOrder] = useState<any>(null);
-  const [selectedDate, setSelectedDate] = useState<string>('');
-  const [selectedTime, setSelectedTime] = useState<string>('');
   const [booked, setBooked] = useState(false);
 
-  const today = new Date();
-  const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
-
-  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-
   useEffect(() => {
-    const stored = localStorage.getItem('ks_latest_order') || localStorage.getItem('ks_latest_nh_order');
+    const stored =
+      localStorage.getItem('ks_latest_order') ||
+      localStorage.getItem('ks_latest_nh_order');
     if (stored) setOrder(JSON.parse(stored));
+
+    // Load Cal.com embed script
+    const script = document.createElement('script');
+    script.src = 'https://app.cal.com/embed/embed.js';
+    script.async = true;
+    document.head.appendChild(script);
+
+    // Listen for Cal.com booking confirmation
+    const handleMessage = (e: MessageEvent) => {
+      if (
+        e.data?.type === 'CAL:bookingSuccessful' ||
+        e.data?.type === 'CAL:rescheduleBookingSuccessful'
+      ) {
+        const stored = localStorage.getItem('ks_latest_order') || localStorage.getItem('ks_latest_nh_order');
+        if (stored) {
+          const o = JSON.parse(stored);
+          const updatedOrder = {
+            ...o,
+            status: 'scheduled',
+            scheduledAt: new Date().toISOString(),
+          };
+          const orders = JSON.parse(localStorage.getItem('ks_orders') || '[]');
+          const idx = orders.findIndex((ord: any) => ord.id === o.id);
+          if (idx >= 0) orders[idx] = updatedOrder;
+          localStorage.setItem('ks_orders', JSON.stringify(orders));
+        }
+        setBooked(true);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      document.head.removeChild(script);
+    };
   }, []);
-
-  const isDateDisabled = (year: number, month: number, day: number) => {
-    const d = new Date(year, month, day);
-    const now = new Date(); now.setHours(0,0,0,0);
-    return d < now || d.getDay() === 0 || d.getDay() === 6;
-  };
-
-  const formatDateKey = (year: number, month: number, day: number) =>
-    `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-
-  const formatDateDisplay = (dateStr: string) => {
-    const [y,m,d] = dateStr.split('-').map(Number);
-    return new Date(y, m-1, d).toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
-  };
-
-  const handleBook = () => {
-    if (!selectedDate || !selectedTime) return;
-    const updatedOrder = { ...order, scheduledDate: selectedDate, scheduledTime: selectedTime, status: 'scheduled' };
-    const orders = JSON.parse(localStorage.getItem('ks_orders') || '[]');
-    const idx = orders.findIndex((o: any) => o.id === order?.id);
-    if (idx >= 0) orders[idx] = updatedOrder;
-    localStorage.setItem('ks_orders', JSON.stringify(orders));
-    setBooked(true);
-  };
-
-  const daysInMonth = getDaysInMonth(viewYear, viewMonth);
-  const firstDay = getFirstDayOfMonth(viewYear, viewMonth);
-
-  const prevMonth = () => {
-    if (viewMonth === 0) { setViewYear(y => y-1); setViewMonth(11); }
-    else setViewMonth(m => m-1);
-  };
-  const nextMonth = () => {
-    if (viewMonth === 11) { setViewYear(y => y+1); setViewMonth(0); }
-    else setViewMonth(m => m+1);
-  };
 
   if (booked) {
     return (
-      <div className="min-h-screen" style={{ background: '#F8FAFD' }}>
-        <Navbar />
-        <div className="max-w-lg mx-auto px-4 py-20 text-center">
-          <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
-            <CheckCircle size={40} className="text-green-500" />
+      <div style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
+        <div style={{ textAlign: 'center', maxWidth: '400px' }}>
+          <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
+            <CheckCircle size={32} style={{ color: '#4ade80' }} />
           </div>
-          <h1 className="text-2xl font-bold mb-3" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>
+          <h1 style={{ fontFamily: 'var(--font-syne)', fontWeight: 800, fontSize: '1.5rem', color: 'white', marginBottom: '0.75rem', letterSpacing: '-0.5px' }}>
             Installation Booked!
           </h1>
-          <p className="text-gray-500 mb-2" style={{ fontFamily: 'var(--font-jakarta)' }}>
-            Your installation is scheduled for
+          <p style={{ color: 'rgba(255,255,255,0.45)', fontFamily: 'var(--font-jakarta)', marginBottom: '0.5rem', lineHeight: 1.7 }}>
+            You&apos;ll receive a confirmation email from Cal.com with your appointment details.
           </p>
-          <p className="font-bold text-lg mb-1" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>
-            {formatDateDisplay(selectedDate)}
-          </p>
-          <p className="text-gray-500 mb-8" style={{ fontFamily: 'var(--font-jakarta)' }}>at {selectedTime}</p>
-
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <button onClick={() => router.push('/dashboard')} className="btn-primary">
-              View My Invoices
-              <ArrowRight size={15} />
-            </button>
-            <button onClick={() => router.push('/')} className="btn-secondary">
+          {order?.property && (
+            <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.3)', fontFamily: 'var(--font-jakarta)', marginBottom: '2rem' }}>
+              {order.property.address}, {order.property.city}
+            </p>
+          )}
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <a href="/dashboard" style={{ background: '#FF5500', color: 'white', fontFamily: 'var(--font-syne)', fontWeight: 700, padding: '0.75rem 1.5rem', borderRadius: '8px', textDecoration: 'none', fontSize: '0.875rem' }}>
+              View Dashboard
+            </a>
+            <a href="/" style={{ background: 'rgba(255,255,255,0.07)', color: 'white', fontFamily: 'var(--font-syne)', fontWeight: 600, padding: '0.75rem 1.5rem', borderRadius: '8px', textDecoration: 'none', fontSize: '0.875rem', border: '1px solid rgba(255,255,255,0.1)' }}>
               Back to Home
-            </button>
+            </a>
           </div>
         </div>
       </div>
@@ -106,115 +85,85 @@ export default function BookingPage() {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: '#F8FAFD' }}>
-      <Navbar />
-
-      <div className="max-w-2xl mx-auto px-4 py-10">
-        <div className="text-center mb-8">
-          <span className="section-tag">Book Installation</span>
-          <h1 className="text-2xl font-bold mb-2" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>
-            {order?.status === 'paid' ? 'Payment confirmed! ' : ''}Schedule your installation
-          </h1>
-          <p className="text-gray-500 text-sm" style={{ fontFamily: 'var(--font-jakarta)' }}>
-            Choose a date and time that works for you. Monday–Friday only.
-          </p>
+    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '2.5rem 1rem' }}>
+      {/* Header */}
+      <div style={{ marginBottom: '2rem' }}>
+        <div style={{ display: 'inline-block', padding: '0.25rem 0.75rem', borderRadius: '20px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', background: 'rgba(255,85,0,0.12)', color: '#FF7730', fontFamily: 'var(--font-syne)', marginBottom: '0.75rem' }}>
+          Book Installation
         </div>
+        <h1 style={{ fontFamily: 'var(--font-syne)', fontWeight: 800, fontSize: 'clamp(1.3rem, 4vw, 1.8rem)', color: 'white', letterSpacing: '-0.5px', marginBottom: '0.5rem' }}>
+          Schedule your installation
+        </h1>
+        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.875rem', fontFamily: 'var(--font-jakarta)' }}>
+          Pick a date and time that works for you. You&apos;ll get a confirmation email right away.
+        </p>
+      </div>
 
-        {/* Calendar */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-5">
-          <div className="flex items-center justify-between mb-5">
-            <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-              <ChevronLeft size={18} />
-            </button>
-            <h3 className="font-bold" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>
-              {MONTHS[viewMonth]} {viewYear}
-            </h3>
-            <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-              <ChevronRight size={18} />
-            </button>
-          </div>
-
-          {/* Day headers */}
-          <div className="grid grid-cols-7 mb-2">
-            {DAYS.map(d => (
-              <div key={d} className="text-center text-xs font-bold text-gray-400 py-1"
-                style={{ fontFamily: 'var(--font-syne)' }}>
-                {d}
-              </div>
-            ))}
-          </div>
-
-          {/* Days */}
-          <div className="grid grid-cols-7 gap-1">
-            {Array.from({ length: firstDay }, (_, i) => <div key={`e${i}`} />)}
-            {Array.from({ length: daysInMonth }, (_, i) => {
-              const day = i + 1;
-              const disabled = isDateDisabled(viewYear, viewMonth, day);
-              const dateKey = formatDateKey(viewYear, viewMonth, day);
-              const isSelected = selectedDate === dateKey;
-              return (
-                <button
-                  key={day}
-                  onClick={() => !disabled && setSelectedDate(dateKey)}
-                  disabled={disabled}
-                  className="aspect-square rounded-lg text-sm font-semibold flex items-center justify-center transition-all"
-                  style={{
-                    fontFamily: 'var(--font-syne)',
-                    background: isSelected ? 'var(--brand-orange)' : 'transparent',
-                    color: isSelected ? 'white' : disabled ? '#D1D5DB' : 'var(--brand-navy)',
-                    cursor: disabled ? 'not-allowed' : 'pointer',
-                  }}>
-                  {day}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Time slots */}
-        {selectedDate && (
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-5">
-            <h3 className="font-bold mb-4 flex items-center gap-2"
-              style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>
-              <Clock size={16} style={{ color: 'var(--brand-orange)' }} />
-              Available times for {formatDateDisplay(selectedDate)}
-            </h3>
-            <div className="grid grid-cols-3 gap-2">
-              {TIME_SLOTS.map(time => (
-                <button
-                  key={time}
-                  onClick={() => setSelectedTime(time)}
-                  className="py-2.5 px-3 rounded-lg text-sm font-semibold border transition-all"
-                  style={{
-                    fontFamily: 'var(--font-syne)',
-                    background: selectedTime === time ? 'var(--brand-orange)' : 'white',
-                    color: selectedTime === time ? 'white' : 'var(--brand-navy)',
-                    borderColor: selectedTime === time ? 'var(--brand-orange)' : '#E0E7EF',
-                  }}>
-                  {time}
-                </button>
-              ))}
+      {/* Order summary strip */}
+      {order && (
+        <div style={{ background: '#0d1e35', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', fontFamily: 'var(--font-syne)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.2rem' }}>
+              Order
+            </div>
+            <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'white', fontFamily: 'var(--font-syne)' }}>
+              #{order.id}
             </div>
           </div>
-        )}
+          {order.property && (
+            <div>
+              <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', fontFamily: 'var(--font-syne)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.2rem' }}>
+                Address
+              </div>
+              <div style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--font-jakarta)' }}>
+                {order.property.address}, {order.property.city}, {order.property.state}
+              </div>
+            </div>
+          )}
+          <div>
+            <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', fontFamily: 'var(--font-syne)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.2rem' }}>
+              Total
+            </div>
+            <div style={{ fontSize: '0.875rem', fontWeight: 700, color: '#FF5500', fontFamily: 'var(--font-syne)' }}>
+              ${order.total}
+            </div>
+          </div>
+        </div>
+      )}
 
-        {/* Confirm button */}
-        <button
-          onClick={handleBook}
-          disabled={!selectedDate || !selectedTime}
-          className="btn-primary w-full"
-          style={{ opacity: (!selectedDate || !selectedTime) ? 0.5 : 1 }}>
-          <Calendar size={16} />
-          Confirm Installation Booking
-          <ArrowRight size={15} />
-        </button>
-
-        {selectedDate && selectedTime && (
-          <p className="text-center text-sm text-gray-500 mt-3" style={{ fontFamily: 'var(--font-jakarta)' }}>
-            {formatDateDisplay(selectedDate)} at {selectedTime}
-          </p>
-        )}
+      {/* Cal.com embed */}
+      <div style={{ background: '#0d1e35', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', overflow: 'hidden', minHeight: '600px' }}>
+        <iframe
+          src="https://cal.com/keyless/lock-installation?embed=true&theme=dark&brandColor=FF5500"
+          style={{ width: '100%', height: '700px', border: 'none', display: 'block' }}
+          title="Book your lock installation"
+        />
       </div>
+
+      <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'rgba(255,255,255,0.2)', fontFamily: 'var(--font-jakarta)', marginTop: '1rem' }}>
+        Powered by Cal.com · You&apos;ll receive a confirmation email after booking
+      </p>
+    </div>
+  );
+}
+
+export default function BookingPage() {
+  return (
+    <div style={{ minHeight: '100vh', background: '#0A1628' }}>
+      <Navbar />
+      <Suspense fallback={
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+          <div style={{ textAlign: 'center' }}>
+            <svg className="animate-spin h-8 w-8 mx-auto mb-4" style={{ color: '#FF5500' }} viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25"/>
+              <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z"/>
+            </svg>
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontFamily: 'var(--font-syne)', fontSize: '0.875rem' }}>Loading calendar...</p>
+          </div>
+        </div>
+      }>
+        <BookingContent />
+      </Suspense>
     </div>
   );
 }
