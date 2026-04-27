@@ -34,6 +34,13 @@ export default function CheckoutPage() {
     if (o.type !== 'existing') { router.push('/existing'); return; }
     setOrder(o);
 
+    // If total is $0 (test/coupon), skip Stripe entirely
+    if (o.total === 0) {
+      setStripeReady(true);
+      setLoading(false);
+      return;
+    }
+
     fetch('/api/create-payment-intent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -99,7 +106,23 @@ export default function CheckoutPage() {
   };
 
   const handlePay = async () => {
-    if (!validate() || !stripeInstance || !stripeElements) return;
+    if (!validate()) return;
+
+    // $0 order — skip Stripe, complete directly
+    if (order.total === 0) {
+      const orderId = `KS-${Date.now()}`;
+      const completedOrder = { ...order, id: orderId, status: 'paid', customer, property, completedAt: new Date().toISOString(), stripePaymentId: 'coupon-free' };
+      const all = JSON.parse(localStorage.getItem('ks_orders') || '[]');
+      all.unshift(completedOrder);
+      localStorage.setItem('ks_orders', JSON.stringify(all));
+      localStorage.setItem('ks_latest_order', JSON.stringify(completedOrder));
+      localStorage.removeItem('ks_pending_order');
+      setSuccess(true);
+      setTimeout(() => router.push('/booking'), 1500);
+      return;
+    }
+
+    if (!stripeInstance || !stripeElements) return;
     setProcessing(true);
     setStripeError('');
     const { error, paymentIntent } = await stripeInstance.confirmPayment({
@@ -334,11 +357,24 @@ export default function CheckoutPage() {
               <div style={boxStyle}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
                   <p style={{ ...sectionTitle, marginBottom: 0 }}>Payment</p>
-                  <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', gap: '0.25rem', fontFamily: 'var(--font-syne)' }}>
-                    <Lock size={10}/> Secured by Stripe
-                  </span>
+                  {order?.total > 0 && (
+                    <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', gap: '0.25rem', fontFamily: 'var(--font-syne)' }}>
+                      <Lock size={10}/> Secured by Stripe
+                    </span>
+                  )}
                 </div>
-                <div id="payment-element" style={{ minHeight: '150px' }} />
+                {order?.total === 0 ? (
+                  <div style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: '10px', padding: '1rem', textAlign: 'center' }}>
+                    <div style={{ fontFamily: 'var(--font-syne)', fontWeight: 700, color: '#4ade80', fontSize: '0.95rem', marginBottom: '0.25rem' }}>
+                      Free Order — No Payment Required
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', fontFamily: 'var(--font-jakarta)' }}>
+                      Coupon applied. Just confirm your details and book your installation.
+                    </div>
+                  </div>
+                ) : (
+                  <div id="payment-element" style={{ minHeight: '150px' }} />
+                )}
               </div>
 
               {stripeError && (
@@ -351,6 +387,8 @@ export default function CheckoutPage() {
                 style={{ width: '100%', background: processing || !stripeReady ? '#374151' : '#FF5500', color: 'white', fontFamily: 'var(--font-syne)', fontWeight: 700, fontSize: '1rem', padding: '1rem', borderRadius: '10px', border: 'none', cursor: processing ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
                 {processing ? (
                   <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z"/></svg>Processing...</>
+                ) : order?.total === 0 ? (
+                  <>Confirm & Book Installation <ArrowRight size={15}/></>
                 ) : (
                   <>Pay ${order?.total} <ArrowRight size={15}/></>
                 )}
