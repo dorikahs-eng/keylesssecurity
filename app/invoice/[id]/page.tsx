@@ -3,14 +3,20 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Printer, CreditCard, Calendar, Check, Download, ArrowLeft } from 'lucide-react';
+import { Printer, CreditCard, Calendar, Check, ArrowLeft, AlertCircle, Lock } from 'lucide-react';
 import { PRICE_PER_DOOR } from '@/lib/types';
 
 export default function InvoicePage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const [order, setOrder] = useState<any>(null);
-  const [paying, setPaying] = useState(false);
   const [paid, setPaid] = useState(false);
+  const [loadingPayment, setLoadingPayment] = useState(false);
+  const [stripeReady, setStripeReady] = useState(false);
+  const [stripeInstance, setStripeInstance] = useState<any>(null);
+  const [stripeElements, setStripeElements] = useState<any>(null);
+  const [showPayForm, setShowPayForm] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [stripeError, setStripeError] = useState('');
 
   useEffect(() => {
     const orders = JSON.parse(localStorage.getItem('ks_orders') || '[]');
@@ -21,247 +27,303 @@ export default function InvoicePage({ params }: { params: { id: string } }) {
     }
   }, [params.id]);
 
-  const handlePay = async () => {
-    setPaying(true);
-    await new Promise(r => setTimeout(r, 2000));
-    const orders = JSON.parse(localStorage.getItem('ks_orders') || '[]');
-    const idx = orders.findIndex((o: any) => o.id === params.id);
-    if (idx >= 0) {
-      orders[idx] = { ...orders[idx], status: 'paid', paidAt: new Date().toISOString() };
-      localStorage.setItem('ks_orders', JSON.stringify(orders));
-      setOrder(orders[idx]);
+  const initStripe = async () => {
+    if (stripeReady || !order) return;
+    setLoadingPayment(true);
+
+    try {
+      const res = await fetch('/api/create-payment-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: order.total }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      const { loadStripe } = await import('@stripe/stripe-js');
+      const stripe = await loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+      if (!stripe) throw new Error('Stripe failed to load');
+      setStripeInstance(stripe);
+
+      const elements = stripe.elements({
+        clientSecret: data.clientSecret,
+        appearance: {
+          theme: 'stripe' as const,
+          variables: {
+            colorPrimary: '#FF5500',
+            colorBackground: '#ffffff',
+            colorText: '#0A1628',
+            borderRadius: '8px',
+          },
+        },
+      });
+      setStripeElements(elements);
+      setStripeReady(true);
+      setShowPayForm(true);
+
+      setTimeout(() => {
+        const container = document.getElementById('invoice-payment-element');
+        if (container && container.children.length === 0) {
+          const el = elements.create('payment', { layout: 'tabs' });
+          el.mount('#invoice-payment-element');
+        }
+      }, 150);
+    } catch (err: any) {
+      setStripeError(err.message);
     }
-    setPaying(false);
-    setPaid(true);
+    setLoadingPayment(false);
   };
 
-  if (!order) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#F8FAFD' }}>
-        <div className="text-center">
-          <p className="text-gray-500 mb-4" style={{ fontFamily: 'var(--font-syne)' }}>Invoice not found</p>
-          <Link href="/" className="btn-primary">Go Home</Link>
-        </div>
+  const handlePay = async () => {
+    if (!stripeInstance || !stripeElements || !order) return;
+    setProcessing(true);
+    setStripeError('');
+
+    const { error, paymentIntent } = await stripeInstance.confirmPayment({
+      elements: stripeElements,
+      confirmParams: {
+        return_url: `${window.location.origin}/booking`,
+        payment_method_data: {
+          billing_details: {
+            name: order.customer ? `${order.customer.firstName} ${order.customer.lastName}` : 'Customer',
+            email: order.customer?.email || order.titleCompany?.email || '',
+          },
+        },
+      },
+      redirect: 'if_required',
+    });
+
+    if (error) {
+      setStripeError(error.message || 'Payment failed.');
+      setProcessing(false);
+      return;
+    }
+
+    if (paymentIntent?.status === 'succeeded') {
+      const orders = JSON.parse(localStorage.getItem('ks_orders') || '[]');
+      const idx = orders.findIndex((o: any) => o.id === params.id);
+      if (idx >= 0) {
+        orders[idx] = { ...orders[idx], status: 'paid', paidAt: new Date().toISOString(), stripePaymentId: paymentIntent.id };
+        localStorage.setItem('ks_orders', JSON.stringify(orders));
+        setOrder(orders[idx]);
+      }
+      setPaid(true);
+      setShowPayForm(false);
+      setTimeout(() => router.push('/booking'), 1500);
+    }
+    setProcessing(false);
+  };
+
+  if (!order) return (
+    <div style={{ minHeight: '100vh', background: '#F8FAFD', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ textAlign: 'center' }}>
+        <p style={{ color: '#6B7280', fontFamily: 'var(--font-syne)', marginBottom: '1rem' }}>Invoice not found</p>
+        <Link href="/" style={{ background: '#FF5500', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '8px', fontFamily: 'var(--font-syne)', fontWeight: 700, textDecoration: 'none' }}>
+          Go Home
+        </Link>
       </div>
-    );
-  }
+    </div>
+  );
 
   const isNH = order.type === 'new-homeowner';
   const totalDoors = order.items?.reduce((s: number, i: any) => s + i.quantity, 0) ?? 0;
 
   return (
-    <div className="min-h-screen" style={{ background: '#F8FAFD' }}>
-      {/* Top bar - no print */}
-      <div className="no-print bg-white border-b border-gray-100 sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link href="/dashboard" className="flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-800"
-            style={{ fontFamily: 'var(--font-syne)' }}>
-            <ArrowLeft size={14} />
-            Dashboard
+    <div style={{ minHeight: '100vh', background: '#F8FAFD' }}>
+      {/* Top bar */}
+      <div className="no-print" style={{ background: 'white', borderBottom: '1px solid #E5E7EB', position: 'sticky', top: 0, zIndex: 50 }}>
+        <div style={{ maxWidth: '680px', margin: '0 auto', padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', fontWeight: 600, color: '#6B7280', textDecoration: 'none', fontFamily: 'var(--font-syne)' }}>
+            <ArrowLeft size={13}/> Dashboard
           </Link>
-          <div className="flex items-center gap-2">
-            <button onClick={() => window.print()}
-              className="flex items-center gap-1.5 text-sm font-semibold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
-              style={{ fontFamily: 'var(--font-syne)' }}>
-              <Printer size={14} />
-              Print / Save PDF
-            </button>
-          </div>
+          <button onClick={() => window.print()} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', fontWeight: 600, padding: '0.4rem 0.9rem', borderRadius: '6px', border: '1px solid #E5E7EB', background: 'white', cursor: 'pointer', fontFamily: 'var(--font-syne)' }}>
+            <Printer size={13}/> Print / Save PDF
+          </button>
         </div>
       </div>
 
-      {/* Invoice */}
-      <div className="max-w-2xl mx-auto px-4 py-8">
-        <div id="invoice-content" className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+      <div style={{ maxWidth: '680px', margin: '0 auto', padding: '2rem 1rem' }}>
+        <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #E5E7EB', overflow: 'hidden' }}>
+
           {/* Invoice header */}
-          <div className="p-8 pb-6" style={{ background: 'var(--brand-navy)' }}>
-            <div className="flex items-start justify-between mb-8">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: 'var(--brand-orange)' }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                    <rect x="3" y="11" width="18" height="11" rx="2" stroke="white" strokeWidth="2"/>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                    <circle cx="12" cy="16" r="1.5" fill="white"/>
-                  </svg>
+          <div style={{ background: '#0A1628', padding: '2rem 2.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <div style={{ width: 32, height: 32, background: '#FF5500', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" stroke="white" strokeWidth="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="white" strokeWidth="2" strokeLinecap="round"/><circle cx="12" cy="16" r="1.5" fill="white"/></svg>
                 </div>
-                <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 800, fontSize: '1.1rem', color: 'white' }}>
-                  KEYLESS<span style={{ color: 'var(--brand-orange)' }}>.</span>
+                <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 800, fontSize: '1.05rem', color: 'white' }}>
+                  KEYLESS<span style={{ color: '#FF5500' }}>.</span>
                 </span>
               </div>
-              <div className="text-right">
-                <div className="text-white/50 text-xs mb-1" style={{ fontFamily: 'var(--font-syne)' }}>INVOICE</div>
-                <div className="text-white font-bold" style={{ fontFamily: 'var(--font-syne)' }}>#{order.id}</div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', marginBottom: '0.2rem', fontFamily: 'var(--font-syne)' }}>INVOICE</div>
+                <div style={{ fontFamily: 'var(--font-syne)', fontWeight: 700, color: 'white' }}>#{order.id}</div>
               </div>
             </div>
 
-            <div className="flex flex-wrap justify-between gap-4">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
               <div>
-                <div className="text-white/50 text-xs mb-1" style={{ fontFamily: 'var(--font-syne)', letterSpacing: '0.08em' }}>BILL TO</div>
+                <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.1em', marginBottom: '0.35rem', fontFamily: 'var(--font-syne)' }}>BILL TO</div>
                 {order.customer && (
                   <>
-                    <div className="text-white font-semibold" style={{ fontFamily: 'var(--font-syne)' }}>
-                      {order.customer.firstName} {order.customer.lastName}
-                    </div>
-                    <div className="text-white/60 text-sm" style={{ fontFamily: 'var(--font-jakarta)' }}>
-                      {order.customer.email}
-                    </div>
+                    <div style={{ fontFamily: 'var(--font-syne)', fontWeight: 600, color: 'white', fontSize: '0.9rem' }}>{order.customer.firstName} {order.customer.lastName}</div>
+                    <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-jakarta)' }}>{order.customer.email}</div>
                   </>
                 )}
                 {order.property && (
-                  <div className="text-white/60 text-sm mt-1" style={{ fontFamily: 'var(--font-jakarta)' }}>
-                    {order.property.address}<br />
-                    {order.property.city}, {order.property.state} {order.property.zip}
+                  <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginTop: '0.3rem', fontFamily: 'var(--font-jakarta)' }}>
+                    {order.property.address}<br/>{order.property.city}, {order.property.state} {order.property.zip}
                   </div>
                 )}
               </div>
-              <div className="text-right">
-                <div className="text-white/50 text-xs mb-1" style={{ fontFamily: 'var(--font-syne)', letterSpacing: '0.08em' }}>DATE</div>
-                <div className="text-white font-semibold" style={{ fontFamily: 'var(--font-syne)' }}>
-                  {new Date(order.createdAt).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })}
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.1em', marginBottom: '0.35rem', fontFamily: 'var(--font-syne)' }}>DATE</div>
+                <div style={{ fontFamily: 'var(--font-syne)', fontWeight: 600, color: 'white', fontSize: '0.9rem' }}>
+                  {new Date(order.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
                 </div>
                 {order.property?.closingDate && (
                   <>
-                    <div className="text-white/50 text-xs mt-3 mb-1" style={{ fontFamily: 'var(--font-syne)', letterSpacing: '0.08em' }}>CLOSING DATE</div>
-                    <div className="text-white font-semibold" style={{ fontFamily: 'var(--font-syne)' }}>{order.property.closingDate}</div>
+                    <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.1em', marginTop: '0.75rem', marginBottom: '0.25rem', fontFamily: 'var(--font-syne)' }}>CLOSING DATE</div>
+                    <div style={{ fontFamily: 'var(--font-syne)', fontWeight: 600, color: 'white', fontSize: '0.9rem' }}>{order.property.closingDate}</div>
                   </>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Title company (new homeowner only) */}
+          {/* Title company banner — Path 2 only */}
           {isNH && order.titleCompany && (
-            <div className="px-8 py-4 border-b border-gray-100 bg-blue-50/50">
-              <div className="text-xs font-bold text-blue-600 mb-1 uppercase tracking-wide" style={{ fontFamily: 'var(--font-syne)' }}>
-                Title Company — For Closing
+            <div style={{ background: '#EFF6FF', borderBottom: '1px solid #BFDBFE', padding: '0.9rem 2.5rem' }}>
+              <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#1D4ED8', letterSpacing: '0.08em', marginBottom: '0.3rem', fontFamily: 'var(--font-syne)' }}>
+                TITLE COMPANY — FOR CLOSING
               </div>
-              <div className="text-sm font-semibold text-gray-700" style={{ fontFamily: 'var(--font-syne)' }}>
-                {order.titleCompany.companyName}
-              </div>
-              <div className="text-sm text-gray-500" style={{ fontFamily: 'var(--font-jakarta)' }}>
-                {order.titleCompany.contactPerson} · {order.titleCompany.email} · {order.titleCompany.phone}
-              </div>
+              <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1E3A5F', fontFamily: 'var(--font-syne)' }}>{order.titleCompany.companyName}</div>
+              <div style={{ fontSize: '0.8rem', color: '#6B7280', fontFamily: 'var(--font-jakarta)' }}>{order.titleCompany.contactPerson} · {order.titleCompany.email} · {order.titleCompany.phone}</div>
             </div>
           )}
 
           {/* Line items */}
-          <div className="px-8 py-6">
-            <div className="mb-4">
-              <div className="grid grid-cols-4 text-xs font-bold text-gray-400 uppercase tracking-wide pb-2 border-b border-gray-100"
-                style={{ fontFamily: 'var(--font-syne)' }}>
-                <div className="col-span-2">Service</div>
-                <div className="text-center">Qty</div>
-                <div className="text-right">Amount</div>
+          <div style={{ padding: '2rem 2.5rem' }}>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '1rem', paddingBottom: '0.5rem', borderBottom: '2px solid #F3F4F6', marginBottom: '0.5rem' }}>
+                <div style={{ fontSize: '0.65rem', fontWeight: 600, color: '#9CA3AF', letterSpacing: '0.08em', fontFamily: 'var(--font-syne)' }}>SERVICE</div>
+                <div style={{ fontSize: '0.65rem', fontWeight: 600, color: '#9CA3AF', letterSpacing: '0.08em', fontFamily: 'var(--font-syne)', textAlign: 'center' }}>QTY</div>
+                <div style={{ fontSize: '0.65rem', fontWeight: 600, color: '#9CA3AF', letterSpacing: '0.08em', fontFamily: 'var(--font-syne)', textAlign: 'right' }}>AMOUNT</div>
               </div>
               {order.items?.map((item: any) => (
-                <div key={item.door.id} className="grid grid-cols-4 py-3 border-b border-gray-50">
-                  <div className="col-span-2">
-                    <div className="font-semibold text-sm" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>
-                      {item.door.label} Smart Lock Installation
-                    </div>
-                    <div className="text-xs text-gray-400" style={{ fontFamily: 'var(--font-jakarta)' }}>
-                      Keyless entry system · Hardware + labor
-                    </div>
+                <div key={item.door.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '1rem', padding: '0.75rem 0', borderBottom: '1px solid #F9FAFB' }}>
+                  <div>
+                    <div style={{ fontFamily: 'var(--font-syne)', fontWeight: 600, fontSize: '0.875rem', color: '#0A1628' }}>{item.door.label} Smart Lock Installation</div>
+                    <div style={{ fontSize: '0.75rem', color: '#9CA3AF', fontFamily: 'var(--font-jakarta)' }}>Keyless entry · Hardware + labor</div>
                   </div>
-                  <div className="text-center text-sm font-semibold text-gray-600" style={{ fontFamily: 'var(--font-syne)' }}>
-                    {item.quantity}
-                  </div>
-                  <div className="text-right font-bold" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>
-                    ${item.quantity * PRICE_PER_DOOR}
-                  </div>
+                  <div style={{ textAlign: 'center', fontFamily: 'var(--font-syne)', fontWeight: 600, fontSize: '0.875rem', color: '#6B7280' }}>{item.quantity}</div>
+                  <div style={{ textAlign: 'right', fontFamily: 'var(--font-syne)', fontWeight: 700, fontSize: '0.875rem', color: '#0A1628' }}>${item.quantity * PRICE_PER_DOOR}</div>
                 </div>
               ))}
             </div>
 
             {/* Totals */}
-            <div className="flex justify-end">
-              <div className="w-48">
-                <div className="flex justify-between py-2 text-sm">
-                  <span className="text-gray-500" style={{ fontFamily: 'var(--font-jakarta)' }}>Subtotal</span>
-                  <span className="font-semibold" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>${order.subtotal}</span>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <div style={{ width: '200px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.35rem 0', fontSize: '0.8rem' }}>
+                  <span style={{ color: '#9CA3AF', fontFamily: 'var(--font-jakarta)' }}>Subtotal</span>
+                  <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 600, color: '#374151' }}>${order.subtotal}</span>
                 </div>
-                <div className="flex justify-between py-2 text-sm">
-                  <span className="text-gray-500" style={{ fontFamily: 'var(--font-jakarta)' }}>Tax</span>
-                  <span className="font-semibold" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>$0.00</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.35rem 0', fontSize: '0.8rem' }}>
+                  <span style={{ color: '#9CA3AF', fontFamily: 'var(--font-jakarta)' }}>Tax</span>
+                  <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 600, color: '#374151' }}>$0.00</span>
                 </div>
-                <div className="flex justify-between py-2 border-t border-gray-200 mt-1">
-                  <span className="font-bold" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>Total Due</span>
-                  <span className="font-black text-xl" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-orange)' }}>
-                    ${order.total}
-                  </span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 0', borderTop: '2px solid #F3F4F6', marginTop: '0.25rem' }}>
+                  <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 700, color: '#0A1628' }}>Total Due</span>
+                  <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 900, fontSize: '1.4rem', color: '#FF5500' }}>${order.total}</span>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Scheduling info */}
-          {order.scheduledDate && (
-            <div className="mx-8 mb-6 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
-              <Calendar size={16} className="text-green-600" />
-              <div>
-                <div className="text-sm font-bold text-green-700" style={{ fontFamily: 'var(--font-syne)' }}>Installation Scheduled</div>
-                <div className="text-xs text-green-600" style={{ fontFamily: 'var(--font-jakarta)' }}>
-                  {order.scheduledDate} at {order.scheduledTime}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Payment section */}
-          <div className="px-8 pb-8 no-print">
-            {paid ? (
-              <div className="p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center shrink-0">
-                  <Check size={16} color="white" />
-                </div>
+            {/* Scheduled badge */}
+            {order.scheduledDate && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '10px', padding: '0.75rem 1rem', marginTop: '1rem' }}>
+                <Calendar size={15} style={{ color: '#16A34A' }} />
                 <div>
-                  <div className="font-bold text-green-700 text-sm" style={{ fontFamily: 'var(--font-syne)' }}>Payment Received</div>
-                  <div className="text-xs text-green-600" style={{ fontFamily: 'var(--font-jakarta)' }}>
-                    This invoice has been paid. Thank you!
-                  </div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#16A34A', fontFamily: 'var(--font-syne)' }}>Installation Scheduled</div>
+                  <div style={{ fontSize: '0.75rem', color: '#15803D', fontFamily: 'var(--font-jakarta)' }}>{order.scheduledDate} at {order.scheduledTime}</div>
                 </div>
-                {!order.scheduledDate && (
-                  <Link href="/booking" className="ml-auto flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg text-white"
-                    style={{ fontFamily: 'var(--font-syne)', background: 'var(--brand-navy)', whiteSpace: 'nowrap' }}>
-                    <Calendar size={12} />
-                    Book Installation
-                  </Link>
-                )}
-              </div>
-            ) : (
-              <div>
-                <div className="text-center mb-4">
-                  <p className="text-sm text-gray-500" style={{ fontFamily: 'var(--font-jakarta)' }}>
-                    {isNH
-                      ? 'This invoice can be paid by the homebuyer or included in closing costs by the title company.'
-                      : 'Complete your payment to confirm your installation.'}
-                  </p>
-                </div>
-                <button onClick={handlePay} disabled={paying} className="btn-primary w-full">
-                  {paying ? (
-                    <span className="flex items-center gap-2">
-                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z"/>
-                      </svg>
-                      Processing...
-                    </span>
-                  ) : (
-                    <>
-                      <CreditCard size={16} />
-                      Pay ${order.total} Now
-                    </>
-                  )}
-                </button>
               </div>
             )}
+
+            {/* Payment section */}
+            <div className="no-print" style={{ marginTop: '1.5rem' }}>
+              {paid ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '10px', padding: '1rem' }}>
+                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#22C55E', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Check size={16} color="white" />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontFamily: 'var(--font-syne)', fontWeight: 700, color: '#16A34A', fontSize: '0.875rem' }}>Payment Received</div>
+                    <div style={{ fontSize: '0.75rem', color: '#15803D', fontFamily: 'var(--font-jakarta)' }}>This invoice has been paid. Thank you!</div>
+                  </div>
+                  {!order.scheduledDate && (
+                    <Link href="/booking" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', fontWeight: 700, padding: '0.5rem 0.9rem', borderRadius: '8px', background: '#0A1628', color: 'white', textDecoration: 'none', fontFamily: 'var(--font-syne)', whiteSpace: 'nowrap' }}>
+                      <Calendar size={12}/> Book Installation
+                    </Link>
+                  )}
+                </div>
+              ) : showPayForm ? (
+                <div>
+                  {isNH && (
+                    <p style={{ fontSize: '0.8rem', color: '#6B7280', textAlign: 'center', marginBottom: '1rem', fontFamily: 'var(--font-jakarta)' }}>
+                      This invoice can be paid by the homebuyer or included in closing costs by the title company.
+                    </p>
+                  )}
+                  <div id="invoice-payment-element" style={{ marginBottom: '1rem', minHeight: '140px' }} />
+                  {stripeError && (
+                    <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '0.6rem 0.9rem', color: '#EF4444', fontSize: '0.8rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontFamily: 'var(--font-jakarta)' }}>
+                      <AlertCircle size={13}/> {stripeError}
+                    </div>
+                  )}
+                  <button onClick={handlePay} disabled={processing}
+                    style={{ width: '100%', background: processing ? '#9CA3AF' : '#FF5500', color: 'white', fontFamily: 'var(--font-syne)', fontWeight: 700, fontSize: '0.95rem', padding: '0.9rem', borderRadius: '10px', border: 'none', cursor: processing ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                    {processing ? (
+                      <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z"/></svg>Processing...</>
+                    ) : (
+                      <><CreditCard size={15}/> Pay ${order.total} Now</>
+                    )}
+                  </button>
+                  <div style={{ textAlign: 'center', marginTop: '0.5rem', fontSize: '0.65rem', color: '#9CA3AF', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem' }}>
+                    <Lock size={9}/> 256-bit SSL encrypted
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {isNH && (
+                    <p style={{ fontSize: '0.8rem', color: '#6B7280', textAlign: 'center', marginBottom: '0.75rem', fontFamily: 'var(--font-jakarta)' }}>
+                      This invoice can be paid by the homebuyer or included in closing costs by the title company.
+                    </p>
+                  )}
+                  {stripeError && (
+                    <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '0.6rem 0.9rem', color: '#EF4444', fontSize: '0.8rem', marginBottom: '0.75rem', fontFamily: 'var(--font-jakarta)' }}>
+                      {stripeError}
+                    </div>
+                  )}
+                  <button onClick={initStripe} disabled={loadingPayment}
+                    style={{ width: '100%', background: loadingPayment ? '#9CA3AF' : '#FF5500', color: 'white', fontFamily: 'var(--font-syne)', fontWeight: 700, fontSize: '0.95rem', padding: '0.9rem', borderRadius: '10px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                    {loadingPayment ? (
+                      <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z"/></svg>Loading...</>
+                    ) : (
+                      <><CreditCard size={15}/> Pay ${order.total} Now</>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Footer */}
-          <div className="px-8 py-4 border-t border-gray-100 flex justify-between items-center text-xs text-gray-400"
-            style={{ fontFamily: 'var(--font-jakarta)' }}>
-            <span>Keyless Security LLC · Licensed &amp; Insured</span>
-            <span>Questions? support@keylesssecurity.com</span>
+          <div style={{ padding: '1rem 2.5rem', borderTop: '1px solid #F3F4F6', display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#9CA3AF', fontFamily: 'var(--font-jakarta)' }}>
+            <span>Keyless Security LLC · Licensed & Insured</span>
+            <span>support@keylesssecurity.com</span>
           </div>
         </div>
       </div>
