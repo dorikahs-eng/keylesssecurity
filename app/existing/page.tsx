@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import DoorIllustration from '@/components/DoorIllustration';
-import { DOOR_TYPES, PRICE_PER_DOOR, PRICE_TIER2, CartItem, calculateTotal, getMinDoors, COUPON_CODES } from '@/lib/types';
+import { DOOR_TYPES, PRICE_PER_DOOR, CartItem, calculateTotal, getMinDoors, COUPON_CODES } from '@/lib/types';
 import { Plus, Minus, ShoppingCart, AlertCircle, Check, Tag, X } from 'lucide-react';
 
 export default function ExistingHomeownerPage() {
@@ -71,37 +71,6 @@ export default function ExistingHomeownerPage() {
     router.push('/checkout');
   };
 
-  // Build line items for summary showing tiered pricing
-  const buildLineItems = () => {
-    if (couponInfo) {
-      return cart.map(item => ({
-        label: `${item.door.label} × ${item.quantity}`,
-        price: item.quantity * couponInfo.pricePerDoor,
-        note: `$${couponInfo.pricePerDoor}/door`,
-      }));
-    }
-    const items: { label: string; price: number; note: string }[] = [];
-    let doorsAccounted = 0;
-    for (const item of cart) {
-      let itemTotal = 0;
-      let note = '';
-      for (let i = 0; i < item.quantity; i++) {
-        const doorNum = doorsAccounted + i + 1;
-        itemTotal += doorNum <= 2 ? PRICE_PER_DOOR : PRICE_TIER2;
-      }
-      if (doorsAccounted < 2 && doorsAccounted + item.quantity > 2) {
-        note = `Mixed rate`;
-      } else if (doorsAccounted >= 2) {
-        note = `$${PRICE_TIER2}/door`;
-      } else {
-        note = `$${PRICE_PER_DOOR}/door`;
-      }
-      items.push({ label: `${item.door.label} × ${item.quantity}`, price: itemTotal, note });
-      doorsAccounted += item.quantity;
-    }
-    return items;
-  };
-
   const s = {
     page: { minHeight: '100vh', background: '#0A1628' } as React.CSSProperties,
     header: { borderBottom: '1px solid rgba(255,255,255,0.08)', background: '#0d1e35', padding: '2.5rem 1rem', textAlign: 'center' as const },
@@ -126,13 +95,11 @@ export default function ExistingHomeownerPage() {
         <div style={s.tag}>Existing Homeowners</div>
         <h1 style={s.h1}>Select your door types</h1>
         <p style={s.sub}>
-          First 2 doors at <strong style={{ color: 'white' }}>${PRICE_PER_DOOR}</strong> each · 
-          3+ doors at <strong style={{ color: '#4ade80' }}>${PRICE_TIER2}</strong> each · 2 door minimum
+          <strong style={{ color: 'white' }}>${PRICE_PER_DOOR}</strong> per door · 1 door minimum
         </p>
       </div>
 
       <div style={s.grid}>
-        {/* Door grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
           {DOOR_TYPES.map((door) => {
             const qty = getQuantity(door.id);
@@ -179,20 +146,13 @@ export default function ExistingHomeownerPage() {
         <div style={{ maxWidth: '420px', margin: '0 auto 1.5rem', background: '#0d1e35', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', padding: '1.25rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
             <Tag size={14} style={{ color: '#FF5500' }} />
-            <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 700, fontSize: '0.85rem', color: 'white' }}>
-              Coupon Code
-            </span>
+            <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 700, fontSize: '0.85rem', color: 'white' }}>Coupon Code</span>
           </div>
-
           {appliedCoupon ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: '8px', padding: '0.6rem 0.9rem' }}>
               <div>
-                <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 700, color: '#4ade80', fontSize: '0.85rem' }}>
-                  {appliedCoupon}
-                </span>
-                <span style={{ fontFamily: 'var(--font-jakarta)', fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginLeft: '0.5rem' }}>
-                  {couponInfo?.label}
-                </span>
+                <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 700, color: '#4ade80', fontSize: '0.85rem' }}>{appliedCoupon}</span>
+                <span style={{ fontFamily: 'var(--font-jakarta)', fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginLeft: '0.5rem' }}>{couponInfo?.label}</span>
               </div>
               <button onClick={removeCoupon} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer' }}>
                 <X size={15} />
@@ -219,34 +179,19 @@ export default function ExistingHomeownerPage() {
         {cart.length > 0 && (
           <div style={{ maxWidth: '420px', margin: '0 auto', background: '#0d1e35', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', padding: '1.25rem' }}>
             <h3 style={{ fontFamily: 'var(--font-syne)', fontWeight: 700, color: 'white', marginBottom: '0.75rem', fontSize: '0.95rem' }}>Order Summary</h3>
-
-            {/* Tiered pricing note */}
-            {!appliedCoupon && totalDoors > 2 && (
-              <div style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '8px', padding: '0.5rem 0.75rem', marginBottom: '0.75rem', fontSize: '0.75rem', color: '#4ade80', fontFamily: 'var(--font-jakarta)' }}>
-                🎉 Doors 3+ discounted to ${PRICE_TIER2} each!
-              </div>
-            )}
-
-            {buildLineItems().map((item, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', fontSize: '0.85rem' }}>
-                <div>
-                  <span style={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'var(--font-jakarta)' }}>{item.label}</span>
-                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem', marginLeft: '0.4rem' }}>({item.note})</span>
-                </div>
-                <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 600, color: 'white' }}>${item.price}</span>
+            {cart.map(item => (
+              <div key={item.door.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', fontSize: '0.85rem' }}>
+                <span style={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'var(--font-jakarta)' }}>{item.door.label} × {item.quantity}</span>
+                <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 600, color: 'white' }}>${item.quantity * PRICE_PER_DOOR}</span>
               </div>
             ))}
-
+            {appliedCoupon && couponInfo && (
+              <div style={{ fontSize: '0.75rem', color: '#4ade80', fontFamily: 'var(--font-syne)', marginBottom: '0.5rem' }}>✓ {couponInfo.label}</div>
+            )}
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.75rem', marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 700, color: 'white' }}>Total</span>
               <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 900, fontSize: '1.3rem', color: '#FF5500' }}>${total}</span>
             </div>
-
-            {totalDoors < minDoors && (
-              <p style={{ fontSize: '0.75rem', color: '#FB923C', marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem', fontFamily: 'var(--font-jakarta)' }}>
-                <AlertCircle size={12} /> Add {minDoors - totalDoors} more door{minDoors - totalDoors > 1 ? 's' : ''} to meet the minimum
-              </p>
-            )}
           </div>
         )}
       </div>
@@ -262,14 +207,7 @@ export default function ExistingHomeownerPage() {
               {totalDoors} door{totalDoors !== 1 ? 's' : ''} selected
             </div>
             {appliedCoupon && (
-              <div style={{ fontSize: '0.7rem', color: '#4ade80', fontFamily: 'var(--font-syne)' }}>
-                {couponInfo?.label}
-              </div>
-            )}
-            {!appliedCoupon && totalDoors > 2 && (
-              <div style={{ fontSize: '0.7rem', color: '#4ade80', fontFamily: 'var(--font-syne)' }}>
-                Volume discount applied!
-              </div>
+              <div style={{ fontSize: '0.7rem', color: '#4ade80', fontFamily: 'var(--font-syne)' }}>{couponInfo?.label}</div>
             )}
           </div>
         </div>
@@ -287,7 +225,7 @@ export default function ExistingHomeownerPage() {
 
       {showMinWarning && (
         <div style={{ position: 'fixed', bottom: '5rem', right: '1.5rem', background: '#DC2626', color: 'white', padding: '0.75rem 1.25rem', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', fontFamily: 'var(--font-syne)', fontWeight: 600, zIndex: 200 }}>
-          <AlertCircle size={15} /> Minimum {minDoors} door{minDoors > 1 ? 's' : ''} required
+          <AlertCircle size={15} /> Select at least {minDoors} door
         </div>
       )}
       <div style={{ height: '5rem' }} />
