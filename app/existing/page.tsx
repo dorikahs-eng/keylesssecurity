@@ -4,16 +4,21 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import DoorIllustration from '@/components/DoorIllustration';
-import { DOOR_TYPES, PRICE_PER_DOOR, MINIMUM_DOORS, CartItem } from '@/lib/types';
-import { Plus, Minus, ShoppingCart, AlertCircle, Check } from 'lucide-react';
+import { DOOR_TYPES, PRICE_PER_DOOR, PRICE_TIER2, CartItem, calculateTotal, getMinDoors, COUPON_CODES } from '@/lib/types';
+import { Plus, Minus, ShoppingCart, AlertCircle, Check, Tag, X } from 'lucide-react';
 
 export default function ExistingHomeownerPage() {
   const router = useRouter();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showMinWarning, setShowMinWarning] = useState(false);
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState('');
+  const [couponError, setCouponError] = useState('');
 
   const totalDoors = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const subtotal = totalDoors * PRICE_PER_DOOR;
+  const total = calculateTotal(totalDoors, appliedCoupon);
+  const minDoors = getMinDoors(appliedCoupon);
+  const couponInfo = appliedCoupon ? COUPON_CODES[appliedCoupon.toUpperCase()] : null;
 
   const getQuantity = (doorId: string) => cart.find(c => c.door.id === doorId)?.quantity ?? 0;
 
@@ -30,86 +35,137 @@ export default function ExistingHomeownerPage() {
     }
   };
 
+  const applyCoupon = () => {
+    const code = couponInput.trim().toUpperCase();
+    if (!code) return;
+    if (COUPON_CODES[code]) {
+      setAppliedCoupon(code);
+      setCouponError('');
+      setCouponInput('');
+    } else {
+      setCouponError('Invalid coupon code');
+    }
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon('');
+    setCouponError('');
+    setCouponInput('');
+  };
+
   const handleCheckout = () => {
-    if (totalDoors < MINIMUM_DOORS) {
+    if (totalDoors < minDoors) {
       setShowMinWarning(true);
       setTimeout(() => setShowMinWarning(false), 3000);
       return;
     }
-    localStorage.setItem('ks_pending_order', JSON.stringify({ type: 'existing', items: cart, subtotal, total: subtotal, createdAt: new Date().toISOString() }));
+    localStorage.setItem('ks_pending_order', JSON.stringify({
+      type: 'existing',
+      items: cart,
+      subtotal: total,
+      total,
+      coupon: appliedCoupon || null,
+      couponLabel: couponInfo?.label || null,
+      createdAt: new Date().toISOString(),
+    }));
     router.push('/checkout');
   };
 
+  // Build line items for summary showing tiered pricing
+  const buildLineItems = () => {
+    if (couponInfo) {
+      return cart.map(item => ({
+        label: `${item.door.label} × ${item.quantity}`,
+        price: item.quantity * couponInfo.pricePerDoor,
+        note: `$${couponInfo.pricePerDoor}/door`,
+      }));
+    }
+    const items: { label: string; price: number; note: string }[] = [];
+    let doorsAccounted = 0;
+    for (const item of cart) {
+      let itemTotal = 0;
+      let note = '';
+      for (let i = 0; i < item.quantity; i++) {
+        const doorNum = doorsAccounted + i + 1;
+        itemTotal += doorNum <= 2 ? PRICE_PER_DOOR : PRICE_TIER2;
+      }
+      if (doorsAccounted < 2 && doorsAccounted + item.quantity > 2) {
+        note = `Mixed rate`;
+      } else if (doorsAccounted >= 2) {
+        note = `$${PRICE_TIER2}/door`;
+      } else {
+        note = `$${PRICE_PER_DOOR}/door`;
+      }
+      items.push({ label: `${item.door.label} × ${item.quantity}`, price: itemTotal, note });
+      doorsAccounted += item.quantity;
+    }
+    return items;
+  };
+
+  const s = {
+    page: { minHeight: '100vh', background: '#0A1628' } as React.CSSProperties,
+    header: { borderBottom: '1px solid rgba(255,255,255,0.08)', background: '#0d1e35', padding: '2.5rem 1rem', textAlign: 'center' as const },
+    tag: { display: 'inline-block', padding: '0.25rem 0.75rem', borderRadius: '20px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', background: 'rgba(255,85,0,0.12)', color: '#FF7730', fontFamily: 'var(--font-syne)', marginBottom: '0.75rem' },
+    h1: { fontFamily: 'var(--font-syne)', fontWeight: 800, fontSize: '1.8rem', color: 'white', letterSpacing: '-0.5px', marginBottom: '0.5rem' },
+    sub: { color: 'rgba(255,255,255,0.45)', fontSize: '0.875rem', fontFamily: 'var(--font-jakarta)' },
+    grid: { maxWidth: '1152px', margin: '0 auto', padding: '2.5rem 1rem' },
+    card: (selected: boolean) => ({
+      borderRadius: '12px', overflow: 'hidden', cursor: 'pointer',
+      background: '#0d1e35',
+      border: selected ? '2px solid #FF5500' : '1px solid rgba(255,255,255,0.08)',
+      boxShadow: selected ? '0 0 20px rgba(255,85,0,0.15)' : 'none',
+      transition: 'all 0.2s',
+    } as React.CSSProperties),
+  };
+
   return (
-    <div className="min-h-screen" style={{ background: '#0A1628' }}>
+    <div style={s.page}>
       <Navbar />
 
-      <div className="border-b" style={{ borderColor: 'rgba(255,255,255,0.08)', background: '#0d1e35' }}>
-        <div className="max-w-6xl mx-auto px-4 py-10 text-center">
-          <div className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest mb-4"
-            style={{ background: 'rgba(255,85,0,0.12)', color: '#FF7730', fontFamily: 'var(--font-syne)' }}>
-            Existing Homeowners
-          </div>
-          <h1 className="text-3xl font-bold mb-3" style={{ fontFamily: 'var(--font-syne)', color: 'white', letterSpacing: '-0.5px' }}>
-            Select your door types
-          </h1>
-          <p style={{ color: 'rgba(255,255,255,0.45)', fontFamily: 'var(--font-jakarta)', fontSize: '0.9rem' }}>
-            Choose each type of door on your property and how many need installation.{' '}
-            <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>$175/door · 2 door minimum.</span>
-          </p>
-        </div>
+      <div style={s.header}>
+        <div style={s.tag}>Existing Homeowners</div>
+        <h1 style={s.h1}>Select your door types</h1>
+        <p style={s.sub}>
+          First 2 doors at <strong style={{ color: 'white' }}>${PRICE_PER_DOOR}</strong> each · 
+          3+ doors at <strong style={{ color: '#4ade80' }}>${PRICE_TIER2}</strong> each · 2 door minimum
+        </p>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 py-10">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div style={s.grid}>
+        {/* Door grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
           {DOOR_TYPES.map((door) => {
             const qty = getQuantity(door.id);
             const selected = qty > 0;
             return (
-              <div key={door.id}
-                className="rounded-xl overflow-hidden cursor-pointer select-none transition-all"
-                style={{
-                  background: '#0d1e35',
-                  border: selected ? '2px solid #FF5500' : '1px solid rgba(255,255,255,0.08)',
-                  boxShadow: selected ? '0 0 20px rgba(255,85,0,0.15)' : 'none',
-                }}>
-
-                {/* SVG Door Illustration */}
-                <div className="relative">
+              <div key={door.id} style={s.card(selected)}>
+                <div style={{ position: 'relative' }}>
                   <DoorIllustration doorId={door.id} size="card" />
                   {selected && (
-                    <div className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center"
-                      style={{ background: '#FF5500' }}>
-                      <Check size={12} color="white" strokeWidth={3} />
+                    <div style={{ position: 'absolute', top: 8, right: 8, width: 22, height: 22, borderRadius: '50%', background: '#FF5500', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Check size={11} color="white" strokeWidth={3} />
                     </div>
                   )}
                 </div>
-
-                <div className="p-3">
-                  <h3 className="text-xs font-bold mb-0.5 leading-tight" style={{ fontFamily: 'var(--font-syne)', color: 'white' }}>
+                <div style={{ padding: '0.75rem' }}>
+                  <h3 style={{ fontFamily: 'var(--font-syne)', fontWeight: 700, fontSize: '0.75rem', color: 'white', marginBottom: '0.25rem' }}>
                     {door.label}
                   </h3>
-                  <p className="text-xs mb-3" style={{ color: 'rgba(255,255,255,0.35)', fontFamily: 'var(--font-jakarta)' }}>
+                  <p style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', marginBottom: '0.75rem', fontFamily: 'var(--font-jakarta)' }}>
                     {door.description}
                   </p>
                   {qty === 0 ? (
-                    <button onClick={() => setQuantity(door.id, 1)}
-                      className="w-full py-2 text-xs font-bold rounded-lg transition-all"
-                      style={{ fontFamily: 'var(--font-syne)', background: '#FF5500', color: 'white' }}>
+                    <button onClick={() => setQuantity(door.id, 1)} style={{ width: '100%', padding: '0.5rem', background: '#FF5500', color: 'white', border: 'none', borderRadius: '8px', fontFamily: 'var(--font-syne)', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer' }}>
                       Select
                     </button>
                   ) : (
-                    <div className="flex items-center justify-between gap-1">
-                      <button onClick={() => setQuantity(door.id, qty - 1)}
-                        className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-                        style={{ background: 'rgba(255,255,255,0.07)', color: 'white', border: '1px solid rgba(255,255,255,0.1)' }}>
-                        <Minus size={12} />
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.25rem' }}>
+                      <button onClick={() => setQuantity(door.id, qty - 1)} style={{ width: 30, height: 30, borderRadius: '8px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Minus size={11} />
                       </button>
-                      <span className="text-sm font-bold" style={{ fontFamily: 'var(--font-syne)', color: 'white' }}>{qty}</span>
-                      <button onClick={() => setQuantity(door.id, qty + 1)}
-                        className="w-8 h-8 rounded-lg flex items-center justify-center"
-                        style={{ background: '#FF5500', color: 'white' }}>
-                        <Plus size={12} />
+                      <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 700, color: 'white', fontSize: '0.875rem' }}>{qty}</span>
+                      <button onClick={() => setQuantity(door.id, qty + 1)} style={{ width: 30, height: 30, borderRadius: '8px', background: '#FF5500', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Plus size={11} />
                       </button>
                     </div>
                   )}
@@ -119,68 +175,122 @@ export default function ExistingHomeownerPage() {
           })}
         </div>
 
+        {/* Coupon code */}
+        <div style={{ maxWidth: '420px', margin: '0 auto 1.5rem', background: '#0d1e35', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', padding: '1.25rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <Tag size={14} style={{ color: '#FF5500' }} />
+            <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 700, fontSize: '0.85rem', color: 'white' }}>
+              Coupon Code
+            </span>
+          </div>
+
+          {appliedCoupon ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: '8px', padding: '0.6rem 0.9rem' }}>
+              <div>
+                <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 700, color: '#4ade80', fontSize: '0.85rem' }}>
+                  {appliedCoupon}
+                </span>
+                <span style={{ fontFamily: 'var(--font-jakarta)', fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginLeft: '0.5rem' }}>
+                  {couponInfo?.label}
+                </span>
+              </div>
+              <button onClick={removeCoupon} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer' }}>
+                <X size={15} />
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                value={couponInput}
+                onChange={e => { setCouponInput(e.target.value.toUpperCase()); setCouponError(''); }}
+                onKeyDown={e => e.key === 'Enter' && applyCoupon()}
+                placeholder="Enter code (e.g. REALTOR)"
+                style={{ flex: 1, padding: '0.6rem 0.9rem', background: 'rgba(255,255,255,0.05)', border: `1px solid ${couponError ? '#EF4444' : 'rgba(255,255,255,0.1)'}`, borderRadius: '8px', color: 'white', fontFamily: 'var(--font-jakarta)', fontSize: '0.875rem', outline: 'none' }}
+              />
+              <button onClick={applyCoupon} style={{ padding: '0.6rem 1rem', background: 'rgba(255,85,0,0.15)', border: '1px solid rgba(255,85,0,0.3)', borderRadius: '8px', color: '#FF7730', fontFamily: 'var(--font-syne)', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}>
+                Apply
+              </button>
+            </div>
+          )}
+          {couponError && <p style={{ fontSize: '0.75rem', color: '#EF4444', marginTop: '0.4rem', fontFamily: 'var(--font-jakarta)' }}>{couponError}</p>}
+        </div>
+
         {/* Order summary */}
         {cart.length > 0 && (
-          <div className="mt-8 rounded-2xl border p-6 max-w-md mx-auto"
-            style={{ background: '#0d1e35', borderColor: 'rgba(255,255,255,0.08)' }}>
-            <h3 className="font-bold text-lg mb-4" style={{ fontFamily: 'var(--font-syne)', color: 'white' }}>Order Summary</h3>
-            <div className="space-y-2 mb-4">
-              {cart.map(item => (
-                <div key={item.door.id} className="flex justify-between text-sm">
-                  <span style={{ color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-jakarta)' }}>{item.door.label} × {item.quantity}</span>
-                  <span className="font-semibold" style={{ fontFamily: 'var(--font-syne)', color: 'white' }}>${item.quantity * PRICE_PER_DOOR}</span>
+          <div style={{ maxWidth: '420px', margin: '0 auto', background: '#0d1e35', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', padding: '1.25rem' }}>
+            <h3 style={{ fontFamily: 'var(--font-syne)', fontWeight: 700, color: 'white', marginBottom: '0.75rem', fontSize: '0.95rem' }}>Order Summary</h3>
+
+            {/* Tiered pricing note */}
+            {!appliedCoupon && totalDoors > 2 && (
+              <div style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '8px', padding: '0.5rem 0.75rem', marginBottom: '0.75rem', fontSize: '0.75rem', color: '#4ade80', fontFamily: 'var(--font-jakarta)' }}>
+                🎉 Doors 3+ discounted to ${PRICE_TIER2} each!
+              </div>
+            )}
+
+            {buildLineItems().map((item, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', fontSize: '0.85rem' }}>
+                <div>
+                  <span style={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'var(--font-jakarta)' }}>{item.label}</span>
+                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem', marginLeft: '0.4rem' }}>({item.note})</span>
                 </div>
-              ))}
+                <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 600, color: 'white' }}>${item.price}</span>
+              </div>
+            ))}
+
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.75rem', marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 700, color: 'white' }}>Total</span>
+              <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 900, fontSize: '1.3rem', color: '#FF5500' }}>${total}</span>
             </div>
-            <div className="flex justify-between items-center pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-              <span className="font-bold" style={{ fontFamily: 'var(--font-syne)', color: 'white' }}>Total</span>
-              <span className="text-xl font-black" style={{ fontFamily: 'var(--font-syne)', color: '#FF5500' }}>${subtotal}</span>
-            </div>
-            {totalDoors < MINIMUM_DOORS && (
-              <p className="text-xs mt-2 flex items-center gap-1" style={{ color: '#FB923C' }}>
-                <AlertCircle size={12} />
-                Add {MINIMUM_DOORS - totalDoors} more door to meet the minimum
+
+            {totalDoors < minDoors && (
+              <p style={{ fontSize: '0.75rem', color: '#FB923C', marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem', fontFamily: 'var(--font-jakarta)' }}>
+                <AlertCircle size={12} /> Add {minDoors - totalDoors} more door{minDoors - totalDoors > 1 ? 's' : ''} to meet the minimum
               </p>
             )}
           </div>
         )}
       </div>
 
-      {/* Fixed cart bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4"
-        style={{ background: '#0d1e35', borderTop: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 -4px 30px rgba(0,0,0,0.4)' }}>
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,85,0,0.15)' }}>
-            <ShoppingCart size={17} style={{ color: '#FF5500' }} />
+      {/* Cart bar */}
+      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#0d1e35', borderTop: '1px solid rgba(255,255,255,0.08)', padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 100 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ width: 36, height: 36, borderRadius: '10px', background: 'rgba(255,85,0,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ShoppingCart size={16} style={{ color: '#FF5500' }} />
           </div>
           <div>
-            <div className="text-sm font-bold" style={{ fontFamily: 'var(--font-syne)', color: 'white' }}>
+            <div style={{ fontFamily: 'var(--font-syne)', fontWeight: 700, color: 'white', fontSize: '0.875rem' }}>
               {totalDoors} door{totalDoors !== 1 ? 's' : ''} selected
             </div>
-            {totalDoors > 0 && totalDoors < MINIMUM_DOORS && (
-              <div className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>{MINIMUM_DOORS - totalDoors} more needed</div>
+            {appliedCoupon && (
+              <div style={{ fontSize: '0.7rem', color: '#4ade80', fontFamily: 'var(--font-syne)' }}>
+                {couponInfo?.label}
+              </div>
+            )}
+            {!appliedCoupon && totalDoors > 2 && (
+              <div style={{ fontSize: '0.7rem', color: '#4ade80', fontFamily: 'var(--font-syne)' }}>
+                Volume discount applied!
+              </div>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="text-right hidden sm:block">
-            <div className="text-xs" style={{ color: 'rgba(255,255,255,0.4)', fontFamily: 'var(--font-syne)' }}>Total</div>
-            <div className="text-xl font-black" style={{ fontFamily: 'var(--font-syne)', color: 'white' }}>${subtotal}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', fontFamily: 'var(--font-syne)' }}>Total</div>
+            <div style={{ fontFamily: 'var(--font-syne)', fontWeight: 900, fontSize: '1.2rem', color: 'white' }}>${total}</div>
           </div>
-          <button onClick={handleCheckout} className="font-bold rounded-lg px-6 py-3 transition-all"
-            style={{ fontFamily: 'var(--font-syne)', background: totalDoors >= MINIMUM_DOORS ? '#FF5500' : '#374151', color: 'white', fontSize: '0.875rem' }}>
+          <button onClick={handleCheckout}
+            style={{ background: totalDoors >= minDoors ? '#FF5500' : '#374151', color: 'white', fontFamily: 'var(--font-syne)', fontWeight: 700, fontSize: '0.875rem', padding: '0.75rem 1.5rem', borderRadius: '10px', border: 'none', cursor: 'pointer' }}>
             Proceed to Checkout
           </button>
         </div>
       </div>
 
       {showMinWarning && (
-        <div className="fixed bottom-20 right-6 flex items-center gap-2 px-4 py-3 rounded-xl z-50 text-sm font-semibold"
-          style={{ background: '#DC2626', color: 'white', fontFamily: 'var(--font-syne)' }}>
-          <AlertCircle size={16} /> Minimum 2 doors required
+        <div style={{ position: 'fixed', bottom: '5rem', right: '1.5rem', background: '#DC2626', color: 'white', padding: '0.75rem 1.25rem', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', fontFamily: 'var(--font-syne)', fontWeight: 600, zIndex: 200 }}>
+          <AlertCircle size={15} /> Minimum {minDoors} door{minDoors > 1 ? 's' : ''} required
         </div>
       )}
-      <div className="h-20" />
+      <div style={{ height: '5rem' }} />
     </div>
   );
 }
