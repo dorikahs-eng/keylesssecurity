@@ -117,6 +117,13 @@ export default function CheckoutPage() {
       localStorage.setItem('ks_orders', JSON.stringify(all));
       localStorage.setItem('ks_latest_order', JSON.stringify(completedOrder));
       localStorage.removeItem('ks_pending_order');
+      try {
+        await fetch('/api/send-invoice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(completedOrder),
+        });
+      } catch {}
       setSuccess(true);
       setTimeout(() => router.push('/booking'), 1500);
       return;
@@ -153,6 +160,14 @@ export default function CheckoutPage() {
       localStorage.setItem('ks_orders', JSON.stringify(all));
       localStorage.setItem('ks_latest_order', JSON.stringify(completedOrder));
       localStorage.removeItem('ks_pending_order');
+      // Send email notifications
+      try {
+        await fetch('/api/send-invoice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(completedOrder),
+        });
+      } catch {}
       setSuccess(true);
       setTimeout(() => router.push('/booking'), 1500);
     }
