@@ -93,14 +93,18 @@ export const DOOR_TYPES: DoorType[] = [
 ];
 
 export const PRICE_PER_DOOR = 175;
-export const MINIMUM_DOORS = 2;
+export const MINIMUM_DOORS = 1;
 
 // Coupon codes — Path 1 (existing homeowners) only
 export const COUPON_CODES: Record<string, { minDoors: number; pricePerDoor: number; label: string }> = {
   REALTOR: { minDoors: 1, pricePerDoor: 150, label: 'Realtor discount applied' },
   AGENT50: { minDoors: 1, pricePerDoor: 125, label: 'Agent discount applied' },
 };
-
+export const COUPON_CODES: Record<string, { minDoors: number; pricePerDoor: number; label: string }> = {
+  REALTOR: { minDoors: 1, pricePerDoor: 150, label: 'Realtor discount applied' },
+  AGENT50: { minDoors: 1, pricePerDoor: 125, label: 'Agent discount applied' },
+  TEST100: { minDoors: 1, pricePerDoor: 0, label: 'Test code — no charge' },
+};
 // Flat $175/door with optional coupon override
 export function calculateTotal(totalDoors: number, coupon?: string): number {
   if (coupon && COUPON_CODES[coupon.toUpperCase()]) {
