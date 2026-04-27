@@ -3,34 +3,85 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight, AlertCircle } from 'lucide-react';
+
+// --- Defined OUTSIDE component to prevent remounting ---
+interface FieldProps {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+  placeholder?: string;
+  required?: boolean;
+}
+
+function Field({ label, value, onChange, type = 'text', placeholder = '', required }: FieldProps) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontFamily: 'var(--font-syne)', fontSize: '0.78rem', fontWeight: 600, color: 'rgba(255,255,255,0.6)', marginBottom: '0.35rem' }}>
+        {label}
+      </label>
+      <input
+        type={type}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        required={required}
+        style={{ width: '100%', padding: '0.75rem 1rem', border: '1.5px solid rgba(255,255,255,0.1)', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '0.95rem', outline: 'none', fontFamily: 'var(--font-jakarta)', boxSizing: 'border-box' }}
+      />
+    </div>
+  );
+}
 
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialTab = searchParams.get('tab') === 'register' ? 'register' : 'login';
-  const [tab, setTab] = useState<'login' | 'register'>(initialTab);
+  const [tab, setTab] = useState<'login' | 'register'>(
+    searchParams.get('tab') === 'register' ? 'register' : 'login'
+  );
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
-  const [regForm, setRegForm] = useState({ firstName: '', lastName: '', email: '', password: '', confirm: '' });
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [regFirst, setRegFirst] = useState('');
+  const [regLast, setRegLast] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regConfirm, setRegConfirm] = useState('');
+
+  // Redirect if already logged in
+  useEffect(() => {
+    const stored = localStorage.getItem('ks_user');
+    if (stored) router.push('/dashboard');
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    await new Promise(r => setTimeout(r, 800));
+    await new Promise(r => setTimeout(r, 600));
 
-    const users = JSON.parse(localStorage.getItem('ks_users') || '[]');
-    const user = users.find((u: any) => u.email === loginForm.email && u.password === loginForm.password);
+    const users: any[] = JSON.parse(localStorage.getItem('ks_users') || '[]');
+    // Normalize email to lowercase for comparison
+    const user = users.find(u =>
+      u.email.toLowerCase() === loginEmail.toLowerCase().trim() &&
+      u.password === loginPassword
+    );
+
     if (!user) {
-      setError('Invalid email or password');
+      setError('Invalid email or password. Check your credentials and try again.');
       setLoading(false);
       return;
     }
-    localStorage.setItem('ks_user', JSON.stringify({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName }));
+
+    localStorage.setItem('ks_user', JSON.stringify({
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+    }));
     setLoading(false);
     router.push('/dashboard');
   };
@@ -38,100 +89,105 @@ function LoginContent() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (regForm.password !== regForm.confirm) { setError('Passwords do not match'); return; }
-    if (regForm.password.length < 6) { setError('Password must be at least 6 characters'); return; }
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 800));
+    if (regPassword !== regConfirm) { setError('Passwords do not match'); return; }
+    if (regPassword.length < 6) { setError('Password must be at least 6 characters'); return; }
+    if (!regFirst.trim() || !regLast.trim()) { setError('First and last name required'); return; }
+    if (!regEmail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) { setError('Valid email required'); return; }
 
-    const users = JSON.parse(localStorage.getItem('ks_users') || '[]');
-    if (users.find((u: any) => u.email === regForm.email)) {
-      setError('An account with this email already exists');
+    setLoading(true);
+    await new Promise(r => setTimeout(r, 600));
+
+    const users: any[] = JSON.parse(localStorage.getItem('ks_users') || '[]');
+    // Check if email already exists (case insensitive)
+    if (users.find(u => u.email.toLowerCase() === regEmail.toLowerCase().trim())) {
+      setError('An account with this email already exists. Try signing in.');
       setLoading(false);
       return;
     }
 
     const newUser = {
       id: `user_${Date.now()}`,
-      email: regForm.email,
-      firstName: regForm.firstName,
-      lastName: regForm.lastName,
-      password: regForm.password,
+      email: regEmail.toLowerCase().trim(),
+      firstName: regFirst.trim(),
+      lastName: regLast.trim(),
+      password: regPassword,
       createdAt: new Date().toISOString(),
     };
+
     users.push(newUser);
     localStorage.setItem('ks_users', JSON.stringify(users));
-    localStorage.setItem('ks_user', JSON.stringify({ id: newUser.id, email: newUser.email, firstName: newUser.firstName, lastName: newUser.lastName }));
+    localStorage.setItem('ks_user', JSON.stringify({
+      id: newUser.id,
+      email: newUser.email,
+      firstName: newUser.firstName,
+      lastName: newUser.lastName,
+    }));
+
     setLoading(false);
     router.push('/dashboard');
   };
 
-  const InputField = ({ label, value, onChange, type = 'text', placeholder = '' }: any) => (
-    <div>
-      <label className="input-label">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder} className="input-field" required />
-    </div>
-  );
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '0.75rem 1rem',
+    border: '1.5px solid rgba(255,255,255,0.1)',
+    borderRadius: '8px', background: 'rgba(255,255,255,0.05)',
+    color: 'white', fontSize: '0.95rem', outline: 'none',
+    fontFamily: 'var(--font-jakarta)', boxSizing: 'border-box',
+  };
 
   return (
-    <div className="min-h-screen flex" style={{ background: '#F8FAFD' }}>
-      {/* Left decorative panel */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-center px-16 relative overflow-hidden"
-        style={{ background: 'var(--brand-navy)' }}>
-        <div className="absolute inset-0 opacity-5"
-          style={{
-            backgroundImage: `linear-gradient(rgba(255,255,255,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.3) 1px, transparent 1px)`,
-            backgroundSize: '40px 40px'
-          }} />
-        <div className="relative">
-          <Link href="/" className="flex items-center gap-2.5 mb-16">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--brand-orange)' }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <rect x="3" y="11" width="18" height="11" rx="2" stroke="white" strokeWidth="2"/>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                <circle cx="12" cy="16" r="1.5" fill="white"/>
-              </svg>
-            </div>
-            <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 800, fontSize: '1.1rem', color: 'white' }}>
-              KEYLESS<span style={{ color: 'var(--brand-orange)' }}>.</span>
-            </span>
-          </Link>
-          <h2 className="text-4xl font-black text-white mb-4" style={{ fontFamily: 'var(--font-syne)' }}>
-            Your access,<br/>your way.
-          </h2>
-          <p className="text-white/55 text-lg leading-relaxed" style={{ fontFamily: 'var(--font-jakarta)' }}>
-            Manage your orders, view invoices, and track installations all in one place.
-          </p>
-        </div>
+    <div style={{ minHeight: '100vh', display: 'flex', background: '#0A1628' }}>
+
+      {/* Left panel - desktop only */}
+      <div className="hidden lg:flex" style={{ width: '45%', flexDirection: 'column', justifyContent: 'center', padding: '4rem', background: '#0d1e35', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '3rem', textDecoration: 'none' }}>
+          <div style={{ width: 30, height: 30, background: '#FF5500', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="11" width="18" height="11" rx="2" stroke="white" strokeWidth="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+              <circle cx="12" cy="16" r="1.5" fill="white"/>
+            </svg>
+          </div>
+          <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 800, fontSize: '1rem', color: 'white', letterSpacing: '-0.3px' }}>
+            KEYLESS<span style={{ color: '#FF5500' }}>.</span>
+          </span>
+        </Link>
+        <h2 style={{ fontFamily: 'var(--font-syne)', fontWeight: 800, fontSize: '2.2rem', color: 'white', marginBottom: '1rem', letterSpacing: '-1px', lineHeight: 1.1 }}>
+          Your access,<br/>your way.
+        </h2>
+        <p style={{ color: 'rgba(255,255,255,0.4)', lineHeight: 1.8, fontFamily: 'var(--font-jakarta)', fontSize: '0.95rem' }}>
+          Manage your orders, view invoices, and track installations — all in one place.
+        </p>
       </div>
 
-      {/* Right: form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md">
+      {/* Right panel - form */}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1.5rem' }}>
+        <div style={{ width: '100%', maxWidth: '400px' }}>
+
           {/* Mobile logo */}
-          <Link href="/" className="flex items-center gap-2.5 mb-8 lg:hidden">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--brand-orange)' }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <Link href="/" className="flex lg:hidden" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '2rem', textDecoration: 'none' }}>
+            <div style={{ width: 28, height: 28, background: '#FF5500', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
                 <rect x="3" y="11" width="18" height="11" rx="2" stroke="white" strokeWidth="2"/>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="white" strokeWidth="2" strokeLinecap="round"/>
                 <circle cx="12" cy="16" r="1.5" fill="white"/>
               </svg>
             </div>
-            <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 800, fontSize: '1.1rem', color: 'var(--brand-navy)' }}>
-              KEYLESS<span style={{ color: 'var(--brand-orange)' }}>.</span>
+            <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 800, fontSize: '1rem', color: 'white' }}>
+              KEYLESS<span style={{ color: '#FF5500' }}>.</span>
             </span>
           </Link>
 
-          {/* Tabs */}
-          <div className="flex bg-gray-100 rounded-xl p-1 mb-8">
+          {/* Tab switcher */}
+          <div style={{ display: 'flex', background: 'rgba(255,255,255,0.05)', borderRadius: '10px', padding: '3px', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.08)' }}>
             {(['login', 'register'] as const).map(t => (
               <button key={t} onClick={() => { setTab(t); setError(''); }}
-                className="flex-1 py-2 text-sm font-bold rounded-lg transition-all"
                 style={{
-                  fontFamily: 'var(--font-syne)',
-                  background: tab === t ? 'white' : 'transparent',
-                  color: tab === t ? 'var(--brand-navy)' : '#9CA8BC',
-                  boxShadow: tab === t ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                  flex: 1, padding: '0.6rem', fontSize: '0.85rem', fontWeight: 700,
+                  fontFamily: 'var(--font-syne)', border: 'none', cursor: 'pointer',
+                  borderRadius: '8px', transition: 'all 0.2s',
+                  background: tab === t ? '#FF5500' : 'transparent',
+                  color: tab === t ? 'white' : 'rgba(255,255,255,0.4)',
                 }}>
                 {t === 'login' ? 'Sign In' : 'Create Account'}
               </button>
@@ -139,88 +195,109 @@ function LoginContent() {
           </div>
 
           {error && (
-            <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm"
-              style={{ fontFamily: 'var(--font-jakarta)' }}>
-              {error}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '8px', padding: '0.75rem', marginBottom: '1rem' }}>
+              <AlertCircle size={15} style={{ color: '#EF4444', flexShrink: 0, marginTop: 1 }} />
+              <p style={{ fontSize: '0.82rem', color: '#FCA5A5', fontFamily: 'var(--font-jakarta)', margin: 0 }}>{error}</p>
             </div>
           )}
 
           {tab === 'login' ? (
-            <form onSubmit={handleLogin} className="space-y-4">
-              <h1 className="text-2xl font-bold mb-6" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>
+            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+              <h1 style={{ fontFamily: 'var(--font-syne)', fontWeight: 800, fontSize: '1.4rem', color: 'white', marginBottom: '0.25rem', letterSpacing: '-0.5px' }}>
                 Welcome back
               </h1>
-              <InputField label="Email Address" type="email" value={loginForm.email}
-                onChange={(v: string) => setLoginForm(p => ({ ...p, email: v }))} placeholder="you@email.com" />
+
+              <Field label="Email Address" type="email" value={loginEmail} onChange={setLoginEmail} placeholder="you@email.com" required />
+
               <div>
-                <label className="input-label">Password</label>
-                <div className="relative">
+                <label style={{ display: 'block', fontFamily: 'var(--font-syne)', fontSize: '0.78rem', fontWeight: 600, color: 'rgba(255,255,255,0.6)', marginBottom: '0.35rem' }}>
+                  Password
+                </label>
+                <div style={{ position: 'relative' }}>
                   <input
                     type={showPass ? 'text' : 'password'}
-                    value={loginForm.password}
-                    onChange={(e) => setLoginForm(p => ({ ...p, password: e.target.value }))}
-                    className="input-field pr-10"
+                    value={loginPassword}
+                    onChange={e => setLoginPassword(e.target.value)}
                     placeholder="••••••••"
                     required
+                    style={{ ...inputStyle, paddingRight: '2.75rem' }}
                   />
                   <button type="button" onClick={() => setShowPass(!showPass)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer' }}>
                     {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
               </div>
-              <button type="submit" disabled={loading} className="btn-primary w-full mt-2">
-                {loading ? 'Signing in...' : 'Sign In'}
-                {!loading && <ArrowRight size={15} />}
+
+              <button type="submit" disabled={loading}
+                style={{ width: '100%', background: '#FF5500', color: 'white', fontFamily: 'var(--font-syne)', fontWeight: 700, fontSize: '0.95rem', padding: '0.875rem', borderRadius: '10px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', opacity: loading ? 0.7 : 1, marginTop: '0.25rem' }}>
+                {loading ? 'Signing in...' : <><ArrowRight size={15}/> Sign In</>}
               </button>
-              <p className="text-center text-sm text-gray-500" style={{ fontFamily: 'var(--font-jakarta)' }}>
+
+              <p style={{ textAlign: 'center', fontSize: '0.82rem', color: 'rgba(255,255,255,0.4)', fontFamily: 'var(--font-jakarta)' }}>
                 No account?{' '}
-                <button type="button" onClick={() => setTab('register')} className="font-semibold hover:underline"
-                  style={{ color: 'var(--brand-orange)' }}>
+                <button type="button" onClick={() => { setTab('register'); setError(''); }}
+                  style={{ background: 'none', border: 'none', color: '#FF5500', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-syne)', fontSize: '0.82rem' }}>
                   Create one
                 </button>
               </p>
             </form>
           ) : (
-            <form onSubmit={handleRegister} className="space-y-4">
-              <h1 className="text-2xl font-bold mb-6" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>
+            <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+              <h1 style={{ fontFamily: 'var(--font-syne)', fontWeight: 800, fontSize: '1.4rem', color: 'white', marginBottom: '0.25rem', letterSpacing: '-0.5px' }}>
                 Create your account
               </h1>
-              <div className="grid grid-cols-2 gap-3">
-                <InputField label="First Name" value={regForm.firstName}
-                  onChange={(v: string) => setRegForm(p => ({ ...p, firstName: v }))} />
-                <InputField label="Last Name" value={regForm.lastName}
-                  onChange={(v: string) => setRegForm(p => ({ ...p, lastName: v }))} />
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <Field label="First Name" value={regFirst} onChange={setRegFirst} required />
+                <Field label="Last Name" value={regLast} onChange={setRegLast} required />
               </div>
-              <InputField label="Email Address" type="email" value={regForm.email}
-                onChange={(v: string) => setRegForm(p => ({ ...p, email: v }))} placeholder="you@email.com" />
+
+              <Field label="Email Address" type="email" value={regEmail} onChange={setRegEmail} placeholder="you@email.com" required />
+
               <div>
-                <label className="input-label">Password</label>
-                <div className="relative">
+                <label style={{ display: 'block', fontFamily: 'var(--font-syne)', fontSize: '0.78rem', fontWeight: 600, color: 'rgba(255,255,255,0.6)', marginBottom: '0.35rem' }}>
+                  Password
+                </label>
+                <div style={{ position: 'relative' }}>
                   <input
                     type={showPass ? 'text' : 'password'}
-                    value={regForm.password}
-                    onChange={(e) => setRegForm(p => ({ ...p, password: e.target.value }))}
-                    className="input-field pr-10"
+                    value={regPassword}
+                    onChange={e => setRegPassword(e.target.value)}
                     placeholder="At least 6 characters"
                     required
+                    style={{ ...inputStyle, paddingRight: '2.75rem' }}
                   />
                   <button type="button" onClick={() => setShowPass(!showPass)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer' }}>
                     {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
               </div>
-              <InputField label="Confirm Password" type="password" value={regForm.confirm}
-                onChange={(v: string) => setRegForm(p => ({ ...p, confirm: v }))} placeholder="••••••••" />
-              <button type="submit" disabled={loading} className="btn-primary w-full mt-2">
-                {loading ? 'Creating account...' : 'Create Account'}
-                {!loading && <ArrowRight size={15} />}
+
+              <div>
+                <label style={{ display: 'block', fontFamily: 'var(--font-syne)', fontSize: '0.78rem', fontWeight: 600, color: 'rgba(255,255,255,0.6)', marginBottom: '0.35rem' }}>
+                  Confirm Password
+                </label>
+                <input
+                  type="password"
+                  value={regConfirm}
+                  onChange={e => setRegConfirm(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  style={inputStyle}
+                />
+              </div>
+
+              <button type="submit" disabled={loading}
+                style={{ width: '100%', background: '#FF5500', color: 'white', fontFamily: 'var(--font-syne)', fontWeight: 700, fontSize: '0.95rem', padding: '0.875rem', borderRadius: '10px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', opacity: loading ? 0.7 : 1, marginTop: '0.25rem' }}>
+                {loading ? 'Creating account...' : <><ArrowRight size={15}/> Create Account</>}
               </button>
-              <p className="text-center text-sm text-gray-500" style={{ fontFamily: 'var(--font-jakarta)' }}>
+
+              <p style={{ textAlign: 'center', fontSize: '0.82rem', color: 'rgba(255,255,255,0.4)', fontFamily: 'var(--font-jakarta)' }}>
                 Already have an account?{' '}
-                <button type="button" onClick={() => setTab('login')} className="font-semibold hover:underline"
-                  style={{ color: 'var(--brand-orange)' }}>
+                <button type="button" onClick={() => { setTab('login'); setError(''); }}
+                  style={{ background: 'none', border: 'none', color: '#FF5500', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-syne)', fontSize: '0.82rem' }}>
                   Sign in
                 </button>
               </p>
