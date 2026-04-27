@@ -89,12 +89,7 @@ export const DOOR_TYPES: DoorType[] = [
     description: 'Basement exterior access door',
     image: DOOR_IMAGE,
   },
-  {
-    id: 'sliding-door',
-    label: 'Sliding / Patio',
-    description: 'Sliding or French patio door',
-    image: DOOR_IMAGE,
-  },
+ 
 ];
 
 export const PRICE_PER_DOOR = 175;
