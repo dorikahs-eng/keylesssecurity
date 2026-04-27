@@ -2,19 +2,53 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import Navbar from '@/components/Navbar';
-import { DOOR_TYPES, PRICE_PER_DOOR, MINIMUM_DOORS, CartItem, CustomerInfo, PropertyInfo, TitleCompanyInfo } from '@/lib/types';
+import DoorIllustration from '@/components/DoorIllustration';
+import { DOOR_TYPES, PRICE_PER_DOOR, CartItem, CustomerInfo, PropertyInfo, TitleCompanyInfo } from '@/lib/types';
 import { Plus, Minus, Check, ArrowRight, ArrowLeft, AlertCircle, Send } from 'lucide-react';
 
 type Step = 1 | 2 | 3 | 4;
 
 const STEPS = [
   { num: 1, label: 'Your Info' },
-  { num: 2, label: 'Door Selection' },
-  { num: 3, label: 'Title Company' },
+  { num: 2, label: 'Doors' },
+  { num: 3, label: 'Title Co.' },
   { num: 4, label: 'Review' },
 ];
+
+// --- InputField defined OUTSIDE component so it never remounts ---
+interface FieldProps {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  error?: string;
+  type?: string;
+  placeholder?: string;
+}
+
+function InputField({ label, value, onChange, error, type = 'text', placeholder = '' }: FieldProps) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontFamily: 'var(--font-syne)', fontSize: '0.78rem', fontWeight: 600, color: 'rgba(255,255,255,0.6)', marginBottom: '0.35rem' }}>
+        {label}
+      </label>
+      <input
+        type={type}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{
+          width: '100%', padding: '0.75rem 1rem',
+          border: `1.5px solid ${error ? '#EF4444' : 'rgba(255,255,255,0.1)'}`,
+          borderRadius: '8px', background: 'rgba(255,255,255,0.05)',
+          color: 'white', fontSize: '0.95rem', outline: 'none',
+          fontFamily: 'var(--font-jakarta)', boxSizing: 'border-box',
+        }}
+      />
+      {error && <p style={{ fontSize: '0.7rem', color: '#EF4444', marginTop: '0.25rem' }}>{error}</p>}
+    </div>
+  );
+}
 
 export default function NewHomeownerPage() {
   const router = useRouter();
@@ -23,16 +57,10 @@ export default function NewHomeownerPage() {
   const [submitted, setSubmitted] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const [customer, setCustomer] = useState<CustomerInfo>({
-    firstName: '', lastName: '', email: '', phone: '',
-  });
-  const [property, setProperty] = useState<PropertyInfo>({
-    address: '', city: '', state: '', zip: '', closingDate: '',
-  });
+  const [customer, setCustomer] = useState<CustomerInfo>({ firstName: '', lastName: '', email: '', phone: '' });
+  const [property, setProperty] = useState<PropertyInfo>({ address: '', city: '', state: '', zip: '', closingDate: '' });
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [titleCompany, setTitleCompany] = useState<TitleCompanyInfo>({
-    companyName: '', contactPerson: '', phone: '', email: '',
-  });
+  const [titleCompany, setTitleCompany] = useState<TitleCompanyInfo>({ companyName: '', contactPerson: '', phone: '', email: '' });
 
   const totalDoors = cart.reduce((sum, i) => sum + i.quantity, 0);
   const subtotal = totalDoors * PRICE_PER_DOOR;
@@ -79,7 +107,7 @@ export default function NewHomeownerPage() {
 
   const next = () => {
     if (step === 1 && !validateStep1()) return;
-    if (step === 2 && totalDoors < MINIMUM_DOORS) return;
+    if (step === 2 && totalDoors < 1) return;
     if (step === 3 && !validateStep3()) return;
     setErrors({});
     setStep((step + 1) as Step);
@@ -89,25 +117,15 @@ export default function NewHomeownerPage() {
     setSubmitting(true);
     const orderId = `KS-NH-${Date.now()}`;
     const order = {
-      id: orderId,
-      type: 'new-homeowner',
-      items: cart,
-      subtotal,
-      total: subtotal,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      customer,
-      property,
-      titleCompany,
+      id: orderId, type: 'new-homeowner',
+      items: cart, subtotal, total: subtotal,
+      status: 'pending', createdAt: new Date().toISOString(),
+      customer, property, titleCompany,
     };
-
-    // Save to localStorage
     const existing = JSON.parse(localStorage.getItem('ks_orders') || '[]');
     existing.unshift(order);
     localStorage.setItem('ks_orders', JSON.stringify(existing));
     localStorage.setItem('ks_latest_nh_order', JSON.stringify(order));
-
-    // Send invoice email
     try {
       await fetch('/api/send-invoice', {
         method: 'POST',
@@ -115,80 +133,65 @@ export default function NewHomeownerPage() {
         body: JSON.stringify(order),
       });
     } catch {}
-
     setSubmitting(false);
     setSubmitted(true);
-
-    setTimeout(() => {
-      router.push(`/invoice/${orderId}`);
-    }, 1500);
+    setTimeout(() => router.push(`/invoice/${orderId}`), 1500);
   };
 
-  const InputField = ({ label, value, onChange, error, type = 'text', placeholder = '' }: any) => (
-    <div>
-      <label className="input-label">{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className={`input-field ${error ? 'border-red-400' : ''}`}
-      />
-      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-    </div>
-  );
+  const box: React.CSSProperties = { background: '#0d1e35', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '1.5rem', marginBottom: '1rem' };
+  const sectionTitle: React.CSSProperties = { fontFamily: 'var(--font-syne)', fontWeight: 700, color: 'white', fontSize: '1rem', marginBottom: '1rem', marginTop: 0 };
+  const grid2: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' };
 
   if (submitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--brand-navy)' }}>
-        <div className="text-center">
-          <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center mx-auto mb-4">
-            <Check size={32} color="white" />
+      <div style={{ minHeight: '100vh', background: '#0A1628', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
+            <Check size={28} style={{ color: '#4ade80' }} />
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2" style={{ fontFamily: 'var(--font-syne)' }}>
-            Invoice Sent!
-          </h2>
-          <p className="text-white/60" style={{ fontFamily: 'var(--font-jakarta)' }}>
-            Redirecting to your invoice...
-          </p>
+          <h2 style={{ fontFamily: 'var(--font-syne)', fontWeight: 800, color: 'white', marginBottom: '0.5rem' }}>Invoice Sent!</h2>
+          <p style={{ color: 'rgba(255,255,255,0.45)', fontFamily: 'var(--font-jakarta)' }}>Redirecting to your invoice...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen" style={{ background: '#F8FAFD' }}>
+    <div style={{ minHeight: '100vh', background: '#0A1628' }}>
       <Navbar />
 
       {/* Header */}
-      <div className="bg-white border-b border-gray-100">
-        <div className="max-w-2xl mx-auto px-4 py-8">
-          <span className="section-tag">New Homeowners</span>
-          <h1 className="text-2xl font-bold mb-1" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>
+      <div style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', background: '#0d1e35' }}>
+        <div style={{ maxWidth: '640px', margin: '0 auto', padding: '2rem 1rem' }}>
+          <div style={{ display: 'inline-block', padding: '0.25rem 0.75rem', borderRadius: '20px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', background: 'rgba(255,85,0,0.12)', color: '#FF7730', fontFamily: 'var(--font-syne)', marginBottom: '0.5rem' }}>
+            New Homebuyers
+          </div>
+          <h1 style={{ fontFamily: 'var(--font-syne)', fontWeight: 800, fontSize: '1.5rem', color: 'white', marginBottom: '0.35rem', letterSpacing: '-0.5px' }}>
             Schedule locks for your new home
           </h1>
-          <p className="text-gray-500 text-sm" style={{ fontFamily: 'var(--font-jakarta)' }}>
-            We'll coordinate with your title company to add lock installation to your closing.
+          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem', fontFamily: 'var(--font-jakarta)', marginBottom: '1.5rem' }}>
+            We coordinate with your title company to add lock installation to your closing.
           </p>
 
           {/* Step indicator */}
-          <div className="flex items-center mt-6">
+          <div style={{ display: 'flex', alignItems: 'center' }}>
             {STEPS.map((s, idx) => (
-              <div key={s.num} className="flex items-center flex-1 last:flex-none">
-                <div className="flex items-center gap-2">
-                  <div className={`step-dot ${step === s.num ? 'active' : step > s.num ? 'completed' : 'inactive'}`}>
-                    {step > s.num ? <Check size={13} /> : s.num}
-                  </div>
-                  <span className="text-xs hidden sm:block" style={{
-                    fontFamily: 'var(--font-syne)',
-                    fontWeight: 600,
-                    color: step >= s.num ? 'var(--brand-navy)' : '#9CA8BC'
+              <div key={s.num} style={{ display: 'flex', alignItems: 'center', flex: idx < STEPS.length - 1 ? 1 : 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontFamily: 'var(--font-syne)', fontWeight: 700, fontSize: '0.75rem',
+                    background: step === s.num ? '#FF5500' : step > s.num ? '#10B981' : 'rgba(255,255,255,0.08)',
+                    color: step >= s.num ? 'white' : 'rgba(255,255,255,0.3)',
                   }}>
+                    {step > s.num ? <Check size={12} /> : s.num}
+                  </div>
+                  <span style={{ fontSize: '0.72rem', fontFamily: 'var(--font-syne)', fontWeight: 600, color: step >= s.num ? 'white' : 'rgba(255,255,255,0.3)' }}>
                     {s.label}
                   </span>
                 </div>
                 {idx < STEPS.length - 1 && (
-                  <div className={`step-line mx-2 flex-1 ${step > s.num ? 'completed' : ''}`} />
+                  <div style={{ flex: 1, height: 1, background: step > s.num ? '#10B981' : 'rgba(255,255,255,0.1)', margin: '0 0.5rem' }} />
                 )}
               </div>
             ))}
@@ -196,258 +199,176 @@ export default function NewHomeownerPage() {
         </div>
       </div>
 
-      {/* Form content */}
-      <div className="max-w-2xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 sm:p-8">
+      {/* Form */}
+      <div style={{ maxWidth: '640px', margin: '0 auto', padding: '1.5rem 1rem 4rem' }}>
 
-          {/* STEP 1: Personal & Property */}
-          {step === 1 && (
-            <div>
-              <h2 className="text-xl font-bold mb-6" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>
-                Personal &amp; Property Details
-              </h2>
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <InputField label="First Name *" value={customer.firstName}
-                  onChange={(v: string) => setCustomer(p => ({ ...p, firstName: v }))}
-                  error={errors.firstName} />
-                <InputField label="Last Name *" value={customer.lastName}
-                  onChange={(v: string) => setCustomer(p => ({ ...p, lastName: v }))}
-                  error={errors.lastName} />
-              </div>
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <InputField label="Email Address *" type="email" value={customer.email}
-                  onChange={(v: string) => setCustomer(p => ({ ...p, email: v }))}
-                  error={errors.email} />
-                <InputField label="Phone Number *" type="tel" value={customer.phone}
-                  placeholder="(555) 000-0000"
-                  onChange={(v: string) => setCustomer(p => ({ ...p, phone: v }))}
-                  error={errors.phone} />
-              </div>
-
-              <p className="text-sm text-gray-500 mb-4" style={{ fontFamily: 'var(--font-jakarta)' }}>
-                Please provide the property address where the installation will take place.
-              </p>
-              <div className="mb-4">
-                <InputField label="Address *" value={property.address}
-                  onChange={(v: string) => setProperty(p => ({ ...p, address: v }))}
-                  error={errors.address} />
-              </div>
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                <InputField label="City *" value={property.city}
-                  onChange={(v: string) => setProperty(p => ({ ...p, city: v }))}
-                  error={errors.city} />
-                <InputField label="State *" value={property.state} placeholder="IL"
-                  onChange={(v: string) => setProperty(p => ({ ...p, state: v }))}
-                  error={errors.state} />
-                <InputField label="ZIP Code *" value={property.zip}
-                  onChange={(v: string) => setProperty(p => ({ ...p, zip: v }))}
-                  error={errors.zip} />
-              </div>
-              <InputField label="Closing Date *" type="date" value={property.closingDate || ''}
-                onChange={(v: string) => setProperty(p => ({ ...p, closingDate: v }))}
-                error={errors.closingDate} />
+        {/* STEP 1 — Personal & Property */}
+        {step === 1 && (
+          <div style={box}>
+            <p style={sectionTitle}>Personal & Property Details</p>
+            <div style={grid2}>
+              <InputField label="First Name *" value={customer.firstName} onChange={v => setCustomer(p => ({ ...p, firstName: v }))} error={errors.firstName} />
+              <InputField label="Last Name *" value={customer.lastName} onChange={v => setCustomer(p => ({ ...p, lastName: v }))} error={errors.lastName} />
             </div>
-          )}
+            <div style={grid2}>
+              <InputField label="Email Address *" type="email" value={customer.email} onChange={v => setCustomer(p => ({ ...p, email: v }))} error={errors.email} />
+              <InputField label="Phone Number *" type="tel" value={customer.phone} placeholder="(555) 000-0000" onChange={v => setCustomer(p => ({ ...p, phone: v }))} error={errors.phone} />
+            </div>
+            <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', marginBottom: '0.75rem', fontFamily: 'var(--font-jakarta)' }}>
+              Property address where installation will take place.
+            </p>
+            <div style={{ marginBottom: '0.75rem' }}>
+              <InputField label="Address *" value={property.address} onChange={v => setProperty(p => ({ ...p, address: v }))} error={errors.address} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+              <InputField label="City *" value={property.city} onChange={v => setProperty(p => ({ ...p, city: v }))} error={errors.city} />
+              <InputField label="State *" value={property.state} placeholder="IL" onChange={v => setProperty(p => ({ ...p, state: v }))} error={errors.state} />
+              <InputField label="ZIP *" value={property.zip} onChange={v => setProperty(p => ({ ...p, zip: v }))} error={errors.zip} />
+            </div>
+            <InputField label="Closing Date *" type="date" value={property.closingDate || ''} onChange={v => setProperty(p => ({ ...p, closingDate: v }))} error={errors.closingDate} />
+          </div>
+        )}
 
-          {/* STEP 2: Door Selection */}
-          {step === 2 && (
-            <div>
-              <h2 className="text-xl font-bold mb-2" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>
-                Select your door types
-              </h2>
-              <p className="text-sm text-gray-500 mb-6" style={{ fontFamily: 'var(--font-jakarta)' }}>
-                Choose each door type and quantity. $175/door · 2 door minimum.
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {DOOR_TYPES.map((door) => {
-                  const qty = getQty(door.id);
-                  const selected = qty > 0;
-                  return (
-                    <div key={door.id}
-                      className={`card cursor-pointer ${selected ? 'door-card-selected' : ''}`}
-                      style={{ borderWidth: selected ? '2px' : '1px' }}>
-                      <div className="relative w-full overflow-hidden" style={{ height: '150px' }}>
-                        <Image src={door.image} alt={door.label} fill sizes="33vw" className="object-cover object-center" unoptimized />
-                        {selected && (
-                          <div className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center"
-                            style={{ background: 'var(--brand-orange)' }}>
-                            <Check size={10} color="white" strokeWidth={3} />
-                          </div>
-                        )}
-                      </div>
-                      <div className="p-3">
-                        <h3 className="text-xs font-bold mb-2" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>
-                          {door.label}
-                        </h3>
-                        {qty === 0 ? (
-                          <button onClick={() => setQty(door.id, 1)} className="w-full py-1.5 text-xs font-bold rounded transition-colors"
-                            style={{ fontFamily: 'var(--font-syne)', background: 'var(--brand-orange)', color: 'white' }}>
-                            Select
-                          </button>
-                        ) : (
-                          <div className="flex items-center justify-between">
-                            <button onClick={() => setQty(door.id, qty - 1)} className="w-7 h-7 rounded border border-gray-200 flex items-center justify-center hover:border-orange-400">
-                              <Minus size={11} />
-                            </button>
-                            <span className="text-sm font-bold" style={{ fontFamily: 'var(--font-syne)' }}>{qty}</span>
-                            <button onClick={() => setQty(door.id, qty + 1)} className="w-7 h-7 rounded flex items-center justify-center text-white"
-                              style={{ background: 'var(--brand-orange)' }}>
-                              <Plus size={11} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
+        {/* STEP 2 — Door Selection */}
+        {step === 2 && (
+          <div style={box}>
+            <p style={sectionTitle}>Select your door types</p>
+            <p style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.4)', marginBottom: '1rem', fontFamily: 'var(--font-jakarta)' }}>
+              ${PRICE_PER_DOOR}/door — choose each type and quantity.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
+              {DOOR_TYPES.map(door => {
+                const qty = getQty(door.id);
+                const selected = qty > 0;
+                return (
+                  <div key={door.id} style={{ borderRadius: '10px', overflow: 'hidden', background: '#0A1628', border: selected ? '2px solid #FF5500' : '1px solid rgba(255,255,255,0.08)', boxShadow: selected ? '0 0 16px rgba(255,85,0,0.12)' : 'none' }}>
+                    <div style={{ position: 'relative' }}>
+                      <DoorIllustration doorId={door.id} size="card" />
+                      {selected && (
+                        <div style={{ position: 'absolute', top: 6, right: 6, width: 20, height: 20, borderRadius: '50%', background: '#FF5500', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Check size={10} color="white" strokeWidth={3} />
+                        </div>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
-              {totalDoors > 0 && (
-                <div className="mt-6 p-4 rounded-xl flex justify-between items-center"
-                  style={{ background: 'rgba(255,85,0,0.06)', border: '1px solid rgba(255,85,0,0.15)' }}>
-                  <span className="text-sm font-semibold" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>
-                    {totalDoors} door{totalDoors !== 1 ? 's' : ''} selected
-                  </span>
-                  <span className="text-lg font-black" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-orange)' }}>
-                    ${subtotal}
-                  </span>
-                </div>
-              )}
-              {totalDoors > 0 && totalDoors < MINIMUM_DOORS && (
-                <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
-                  <AlertCircle size={12} />
-                  Add {MINIMUM_DOORS - totalDoors} more door to meet the minimum
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* STEP 3: Title Company */}
-          {step === 3 && (
-            <div>
-              <h2 className="text-xl font-bold mb-2" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>
-                Title company contact details
-              </h2>
-              <p className="text-sm text-gray-500 mb-6" style={{ fontFamily: 'var(--font-jakarta)' }}>
-                We'll send the invoice directly to your title company so it can be included in closing costs.
-              </p>
-              <div className="space-y-4">
-                <InputField label="Title Company Name *" value={titleCompany.companyName}
-                  placeholder="Enter the title company name"
-                  onChange={(v: string) => setTitleCompany(p => ({ ...p, companyName: v }))}
-                  error={errors.tcName} />
-                <InputField label="Title Company Contact Person *" value={titleCompany.contactPerson}
-                  placeholder="Enter the contact person's name"
-                  onChange={(v: string) => setTitleCompany(p => ({ ...p, contactPerson: v }))}
-                  error={errors.tcContact} />
-                <InputField label="Title Company Phone Number *" type="tel" value={titleCompany.phone}
-                  placeholder="Enter the phone number"
-                  onChange={(v: string) => setTitleCompany(p => ({ ...p, phone: v }))}
-                  error={errors.tcPhone} />
-                <InputField label="Title Company Email *" type="email" value={titleCompany.email}
-                  placeholder="Enter the email address"
-                  onChange={(v: string) => setTitleCompany(p => ({ ...p, email: v }))}
-                  error={errors.tcEmail} />
-              </div>
-            </div>
-          )}
-
-          {/* STEP 4: Review */}
-          {step === 4 && (
-            <div>
-              <h2 className="text-xl font-bold mb-6" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>
-                Review your order
-              </h2>
-
-              {/* Customer */}
-              <div className="mb-5 p-4 rounded-xl bg-gray-50 border border-gray-100">
-                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2" style={{ fontFamily: 'var(--font-syne)' }}>
-                  Your Information
-                </h3>
-                <p className="font-semibold text-sm" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>
-                  {customer.firstName} {customer.lastName}
-                </p>
-                <p className="text-sm text-gray-500">{customer.email} · {customer.phone}</p>
-              </div>
-
-              {/* Property */}
-              <div className="mb-5 p-4 rounded-xl bg-gray-50 border border-gray-100">
-                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2" style={{ fontFamily: 'var(--font-syne)' }}>
-                  Property
-                </h3>
-                <p className="font-semibold text-sm" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>
-                  {property.address}
-                </p>
-                <p className="text-sm text-gray-500">{property.city}, {property.state} {property.zip}</p>
-                <p className="text-sm text-gray-500">Closing: {property.closingDate}</p>
-              </div>
-
-              {/* Doors */}
-              <div className="mb-5 p-4 rounded-xl bg-gray-50 border border-gray-100">
-                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2" style={{ fontFamily: 'var(--font-syne)' }}>
-                  Doors
-                </h3>
-                {cart.map(item => (
-                  <div key={item.door.id} className="flex justify-between text-sm mb-1">
-                    <span style={{ fontFamily: 'var(--font-jakarta)', color: '#4B5563' }}>
-                      {item.door.label} × {item.quantity}
-                    </span>
-                    <span className="font-semibold" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>
-                      ${item.quantity * PRICE_PER_DOOR}
-                    </span>
+                    <div style={{ padding: '0.6rem' }}>
+                      <p style={{ fontFamily: 'var(--font-syne)', fontWeight: 700, fontSize: '0.72rem', color: 'white', marginBottom: '0.5rem' }}>{door.label}</p>
+                      {qty === 0 ? (
+                        <button onClick={() => setQty(door.id, 1)} style={{ width: '100%', padding: '0.4rem', background: '#FF5500', color: 'white', border: 'none', borderRadius: '6px', fontFamily: 'var(--font-syne)', fontWeight: 700, fontSize: '0.7rem', cursor: 'pointer' }}>
+                          Select
+                        </button>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <button onClick={() => setQty(door.id, qty - 1)} style={{ width: 26, height: 26, borderRadius: '6px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Minus size={10} />
+                          </button>
+                          <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 700, color: 'white', fontSize: '0.85rem' }}>{qty}</span>
+                          <button onClick={() => setQty(door.id, qty + 1)} style={{ width: 26, height: 26, borderRadius: '6px', background: '#FF5500', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Plus size={10} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                ))}
-                <div className="border-t border-gray-200 mt-3 pt-3 flex justify-between">
-                  <span className="font-bold text-sm" style={{ fontFamily: 'var(--font-syne)' }}>Total</span>
-                  <span className="font-black text-lg" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-orange)' }}>${subtotal}</span>
-                </div>
-              </div>
-
-              {/* Title Company */}
-              <div className="mb-6 p-4 rounded-xl bg-gray-50 border border-gray-100">
-                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2" style={{ fontFamily: 'var(--font-syne)' }}>
-                  Title Company
-                </h3>
-                <p className="font-semibold text-sm" style={{ fontFamily: 'var(--font-syne)', color: 'var(--brand-navy)' }}>
-                  {titleCompany.companyName}
-                </p>
-                <p className="text-sm text-gray-500">{titleCompany.contactPerson} · {titleCompany.email}</p>
-              </div>
-
-              <div className="text-sm text-gray-500 mb-4 flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100">
-                <Send size={14} className="mt-0.5 text-blue-500 shrink-0" />
-                <p style={{ fontFamily: 'var(--font-jakarta)' }}>
-                  An invoice will be sent to <strong>{customer.email}</strong> and <strong>{titleCompany.email}</strong> with a payment link for closing.
-                </p>
-              </div>
+                );
+              })}
             </div>
-          )}
-
-          {/* Navigation buttons */}
-          <div className="flex justify-between mt-8 pt-6 border-t border-gray-100">
-            {step > 1 ? (
-              <button onClick={() => setStep((step - 1) as Step)}
-                className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-700 transition-colors"
-                style={{ fontFamily: 'var(--font-syne)' }}>
-                <ArrowLeft size={15} />
-                Back
-              </button>
-            ) : <div />}
-
-            {step < 4 ? (
-              <button onClick={next}
-                disabled={step === 2 && totalDoors < MINIMUM_DOORS}
-                className="btn-primary"
-                style={{ opacity: step === 2 && totalDoors < MINIMUM_DOORS ? 0.5 : 1 }}>
-                Continue
-                <ArrowRight size={15} />
-              </button>
-            ) : (
-              <button onClick={handleSubmit} disabled={submitting} className="btn-primary">
-                {submitting ? 'Sending...' : 'Submit & Send Invoice'}
-                <Send size={15} />
-              </button>
+            {totalDoors > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: 'rgba(255,85,0,0.06)', border: '1px solid rgba(255,85,0,0.15)', borderRadius: '10px' }}>
+                <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 600, color: 'white', fontSize: '0.875rem' }}>{totalDoors} door{totalDoors !== 1 ? 's' : ''} selected</span>
+                <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 900, fontSize: '1.1rem', color: '#FF5500' }}>${subtotal}</span>
+              </div>
+            )}
+            {totalDoors === 0 && (
+              <p style={{ fontSize: '0.75rem', color: '#FB923C', display: 'flex', alignItems: 'center', gap: '0.3rem', fontFamily: 'var(--font-jakarta)' }}>
+                <AlertCircle size={12} /> Select at least 1 door to continue
+              </p>
             )}
           </div>
+        )}
+
+        {/* STEP 3 — Title Company */}
+        {step === 3 && (
+          <div style={box}>
+            <p style={sectionTitle}>Title company contact details</p>
+            <p style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.4)', marginBottom: '1rem', fontFamily: 'var(--font-jakarta)' }}>
+              We'll send the invoice directly to your title company for closing.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <InputField label="Title Company Name *" value={titleCompany.companyName} placeholder="Enter the title company name" onChange={v => setTitleCompany(p => ({ ...p, companyName: v }))} error={errors.tcName} />
+              <InputField label="Contact Person *" value={titleCompany.contactPerson} placeholder="Enter the contact person's name" onChange={v => setTitleCompany(p => ({ ...p, contactPerson: v }))} error={errors.tcContact} />
+              <InputField label="Phone Number *" type="tel" value={titleCompany.phone} placeholder="Enter the phone number" onChange={v => setTitleCompany(p => ({ ...p, phone: v }))} error={errors.tcPhone} />
+              <InputField label="Email Address *" type="email" value={titleCompany.email} placeholder="Enter the email address" onChange={v => setTitleCompany(p => ({ ...p, email: v }))} error={errors.tcEmail} />
+            </div>
+          </div>
+        )}
+
+        {/* STEP 4 — Review */}
+        {step === 4 && (
+          <div style={box}>
+            <p style={sectionTitle}>Review your order</p>
+
+            <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '1rem', marginBottom: '0.75rem' }}>
+              <p style={{ fontSize: '0.65rem', fontFamily: 'var(--font-syne)', fontWeight: 700, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Your Information</p>
+              <p style={{ fontFamily: 'var(--font-syne)', fontWeight: 600, color: 'white', fontSize: '0.9rem' }}>{customer.firstName} {customer.lastName}</p>
+              <p style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-jakarta)' }}>{customer.email} · {customer.phone}</p>
+            </div>
+
+            <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '1rem', marginBottom: '0.75rem' }}>
+              <p style={{ fontSize: '0.65rem', fontFamily: 'var(--font-syne)', fontWeight: 700, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Property</p>
+              <p style={{ fontFamily: 'var(--font-syne)', fontWeight: 600, color: 'white', fontSize: '0.9rem' }}>{property.address}</p>
+              <p style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-jakarta)' }}>{property.city}, {property.state} {property.zip} · Closing: {property.closingDate}</p>
+            </div>
+
+            <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '1rem', marginBottom: '0.75rem' }}>
+              <p style={{ fontSize: '0.65rem', fontFamily: 'var(--font-syne)', fontWeight: 700, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Doors</p>
+              {cart.map(item => (
+                <div key={item.door.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.3rem' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'var(--font-jakarta)' }}>{item.door.label} × {item.quantity}</span>
+                  <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 600, color: 'white' }}>${item.quantity * PRICE_PER_DOOR}</span>
+                </div>
+              ))}
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '0.5rem', marginTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 700, color: 'white', fontSize: '0.875rem' }}>Total</span>
+                <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 900, fontSize: '1.2rem', color: '#FF5500' }}>${subtotal}</span>
+              </div>
+            </div>
+
+            <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '1rem', marginBottom: '1rem' }}>
+              <p style={{ fontSize: '0.65rem', fontFamily: 'var(--font-syne)', fontWeight: 700, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Title Company</p>
+              <p style={{ fontFamily: 'var(--font-syne)', fontWeight: 600, color: 'white', fontSize: '0.9rem' }}>{titleCompany.companyName}</p>
+              <p style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-jakarta)' }}>{titleCompany.contactPerson} · {titleCompany.email}</p>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.875rem', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: '10px', marginBottom: '0.5rem' }}>
+              <Send size={14} style={{ color: '#60A5FA', marginTop: 2, flexShrink: 0 }} />
+              <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-jakarta)', lineHeight: 1.6, margin: 0 }}>
+                An invoice will be sent to <strong style={{ color: 'white' }}>{customer.email}</strong> and <strong style={{ color: 'white' }}>{titleCompany.email}</strong> with a payment link for closing.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Navigation */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem' }}>
+          {step > 1 ? (
+            <button onClick={() => setStep((step - 1) as Step)}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.875rem', fontWeight: 600, color: 'rgba(255,255,255,0.5)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-syne)' }}>
+              <ArrowLeft size={14} /> Back
+            </button>
+          ) : <div />}
+
+          {step < 4 ? (
+            <button onClick={next}
+              disabled={step === 2 && totalDoors < 1}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: step === 2 && totalDoors < 1 ? '#374151' : '#FF5500', color: 'white', fontFamily: 'var(--font-syne)', fontWeight: 700, fontSize: '0.9rem', padding: '0.875rem 1.75rem', borderRadius: '10px', border: 'none', cursor: step === 2 && totalDoors < 1 ? 'not-allowed' : 'pointer' }}>
+              Continue <ArrowRight size={14} />
+            </button>
+          ) : (
+            <button onClick={handleSubmit} disabled={submitting}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#FF5500', color: 'white', fontFamily: 'var(--font-syne)', fontWeight: 700, fontSize: '0.9rem', padding: '0.875rem 1.75rem', borderRadius: '10px', border: 'none', cursor: 'pointer', opacity: submitting ? 0.6 : 1 }}>
+              {submitting ? 'Sending...' : 'Submit & Send Invoice'} <Send size={14} />
+            </button>
+          )}
         </div>
       </div>
     </div>
