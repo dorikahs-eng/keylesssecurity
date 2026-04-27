@@ -96,10 +96,7 @@ export const PRICE_PER_DOOR = 175;
 export const MINIMUM_DOORS = 1;
 
 // Coupon codes — Path 1 (existing homeowners) only
-export const COUPON_CODES: Record<string, { minDoors: number; pricePerDoor: number; label: string }> = {
-  REALTOR: { minDoors: 1, pricePerDoor: 150, label: 'Realtor discount applied' },
-  AGENT50: { minDoors: 1, pricePerDoor: 125, label: 'Agent discount applied' },
-};
+
 export const COUPON_CODES: Record<string, { minDoors: number; pricePerDoor: number; label: string }> = {
   REALTOR: { minDoors: 1, pricePerDoor: 150, label: 'Realtor discount applied' },
   AGENT50: { minDoors: 1, pricePerDoor: 125, label: 'Agent discount applied' },
