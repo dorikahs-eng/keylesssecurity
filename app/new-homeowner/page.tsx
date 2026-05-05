@@ -127,11 +127,18 @@ export default function NewHomeownerPage() {
     localStorage.setItem('ks_orders', JSON.stringify(existing));
     localStorage.setItem('ks_latest_nh_order', JSON.stringify(order));
     try {
-      await fetch('/api/send-invoice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(order),
-      });
+      await Promise.all([
+        fetch('/api/send-invoice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(order),
+        }),
+        fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(order),
+        }),
+      ]);
     } catch {}
     setSubmitting(false);
     setSubmitted(true);
