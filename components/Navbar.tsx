@@ -1,121 +1,151 @@
-'use client';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-import Link from 'next/link';
-import { useRouter, usePathname } from 'next/navigation';
-import { useState, useEffect } from 'react';
-import { User, LogOut, LayoutDashboard, Menu, X } from 'lucide-react';
+:root {
+  --brand-gold: #C9A84C;
+  --brand-gold-dark: #A8873A;
+  --brand-gold-light: #F0C96B;
+  --brand-black: #000000;
+  --brand-dark: #111111;
+  --font-syne: 'Syne', sans-serif;
+  --font-jakarta: 'Plus Jakarta Sans', sans-serif;
+}
 
-export default function Navbar() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const [user, setUser] = useState<{ firstName: string; email: string } | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { font-family: var(--font-jakarta); background: #ffffff; color: #111111; }
 
-  useEffect(() => {
-    const stored = localStorage.getItem('ks_user');
-    if (stored) {
-      try { setUser(JSON.parse(stored)); } catch {}
-    }
-  }, [pathname]);
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: #f5f5f5; }
+::-webkit-scrollbar-thumb { background: var(--brand-gold); border-radius: 3px; }
 
-  const logout = () => {
-    localStorage.removeItem('ks_user');
-    setUser(null);
-    router.push('/');
-  };
+.font-syne { font-family: var(--font-syne); }
 
-  return (
-    <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--brand-orange)' }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <rect x="3" y="11" width="18" height="11" rx="2" stroke="white" strokeWidth="2"/>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                <circle cx="12" cy="16" r="1.5" fill="white"/>
-              </svg>
-            </div>
-            <span style={{ fontFamily: 'var(--font-syne)', fontWeight: 800, fontSize: '1.1rem', color: 'var(--brand-navy)' }}>
-              KEYLESS<span style={{ color: 'var(--brand-orange)' }}>.</span>
-            </span>
-          </Link>
+.btn-primary {
+  background: var(--brand-gold);
+  color: white;
+  font-family: var(--font-syne);
+  font-weight: 700;
+  padding: 0.875rem 2rem;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  border: none;
+  font-size: 0.875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.btn-primary:hover { background: var(--brand-gold-dark); transform: translateY(-1px); }
 
-          {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-6">
-            <Link href="/existing" className="text-sm font-medium text-gray-600 hover:text-orange-600 transition-colors"
-              style={{ fontFamily: 'var(--font-syne)' }}>
-              Existing Homeowners
-            </Link>
-            <Link href="/new-homeowner" className="text-sm font-medium text-gray-600 hover:text-orange-600 transition-colors"
-              style={{ fontFamily: 'var(--font-syne)' }}>
-              Buying a Home
-            </Link>
-          </nav>
+.btn-secondary {
+  background: var(--brand-black);
+  color: white;
+  font-family: var(--font-syne);
+  font-weight: 700;
+  padding: 0.875rem 2rem;
+  border-radius: 4px;
+  border: none;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  font-size: 0.875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.btn-secondary:hover { background: #333; }
 
-          {/* Right actions */}
-          <div className="hidden md:flex items-center gap-3">
-            {user ? (
-              <>
-                <Link href="/dashboard" className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 hover:text-orange-600 transition-colors"
-                  style={{ fontFamily: 'var(--font-syne)' }}>
-                  <LayoutDashboard size={15} />
-                  {user.firstName}
-                </Link>
-                <button onClick={logout} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-500 transition-colors">
-                  <LogOut size={15} />
-                </button>
-              </>
-            ) : (
-              <>
-                <Link href="/login" className="text-sm font-semibold text-gray-600 hover:text-orange-600 transition-colors"
-                  style={{ fontFamily: 'var(--font-syne)' }}>
-                  Sign In
-                </Link>
-                <Link href="/login?tab=register" className="btn-primary !py-2 !px-4 text-sm">
-                  Get Started
-                </Link>
-              </>
-            )}
-          </div>
+.card {
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #ebebeb;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+.card:hover { border-color: var(--brand-gold); }
 
-          {/* Mobile menu toggle */}
-          <button className="md:hidden p-2 rounded-lg hover:bg-gray-100" onClick={() => setMenuOpen(!menuOpen)}>
-            {menuOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-        </div>
+.input-field {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1.5px solid #e5e5e5;
+  border-radius: 4px;
+  font-family: var(--font-jakarta);
+  font-size: 0.95rem;
+  color: #111;
+  background: white;
+  transition: border-color 0.2s;
+  outline: none;
+  box-sizing: border-box;
+}
+.input-field:focus {
+  border-color: var(--brand-gold);
+  box-shadow: 0 0 0 3px rgba(201,168,76,0.1);
+}
 
-        {/* Mobile menu */}
-        {menuOpen && (
-          <div className="md:hidden border-t border-gray-100 py-4 space-y-3">
-            <Link href="/existing" className="block py-2 text-sm font-semibold text-gray-700" style={{ fontFamily: 'var(--font-syne)' }}
-              onClick={() => setMenuOpen(false)}>
-              Existing Homeowners
-            </Link>
-            <Link href="/new-homeowner" className="block py-2 text-sm font-semibold text-gray-700" style={{ fontFamily: 'var(--font-syne)' }}
-              onClick={() => setMenuOpen(false)}>
-              Buying a Home
-            </Link>
-            {user ? (
-              <>
-                <Link href="/dashboard" className="block py-2 text-sm font-semibold text-gray-700" style={{ fontFamily: 'var(--font-syne)' }}
-                  onClick={() => setMenuOpen(false)}>
-                  My Dashboard
-                </Link>
-                <button onClick={logout} className="block py-2 text-sm text-red-500 font-semibold" style={{ fontFamily: 'var(--font-syne)' }}>
-                  Sign Out
-                </button>
-              </>
-            ) : (
-              <Link href="/login" className="block py-2 text-sm font-semibold text-gray-700" style={{ fontFamily: 'var(--font-syne)' }}
-                onClick={() => setMenuOpen(false)}>
-                Sign In / Register
-              </Link>
-            )}
-          </div>
-        )}
-      </div>
-    </header>
-  );
+.input-label {
+  display: block;
+  font-family: var(--font-syne);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 0.4rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.section-tag {
+  display: inline-block;
+  font-family: var(--font-syne);
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brand-gold);
+  margin-bottom: 0.75rem;
+}
+
+.door-card-selected {
+  border: 2px solid var(--brand-gold) !important;
+  box-shadow: 0 4px 20px rgba(201,168,76,0.15) !important;
+}
+
+.cart-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #111;
+  color: white;
+  padding: 1rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 100;
+  border-top: 1px solid rgba(201,168,76,0.3);
+}
+
+.toast {
+  position: fixed;
+  bottom: 5rem;
+  right: 1.5rem;
+  background: #111;
+  color: white;
+  padding: 0.875rem 1.25rem;
+  border-radius: 4px;
+  font-family: var(--font-syne);
+  font-weight: 600;
+  z-index: 9999;
+  border-left: 3px solid var(--brand-gold);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: white; }
 }
