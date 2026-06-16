@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Keyless Security — Property Access, Reconsidered</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<style>
+  /* System font stack — zero network dependency, renders identically offline.
+     Display: condensed/expanded system sans for headlines.
+     Mono: system monospace for labels/data, matches JetBrains Mono's feel. */
+</style>
+<style>
+  :root{
+    --black:#0B0B0C;
+    --black-2:#161512;
+    --gold:#C9A84C;
+    --gold-soft:#E2CD92;
+    --bone:#F7F5F0;
+    --bone-dim:#EAE6DC;
+    --steel:#8A8A86;
+    --steel-dim:#5C5C58;
+    --line: rgba(255,255,255,0.12);
+    --line-dark: rgba(0,0,0,0.1);
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box;}
+
+  html,body{
+    background:#000;
+    font-family:-apple-system, 'Helvetica Neue', Arial, sans-serif;
+  }
+
+  .deck{
+    width:100vw;
+    height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+  }
+
+  .slide{
+    width:1920px;
+    height:1080px;
+    flex-shrink:0;
+    position:absolute;
+    top:0; left:0;
+    background:var(--bone);
+    overflow:hidden;
+    transform-origin:center center;
+    visibility:hidden;
+    opacity:0;
+    pointer-events:none;
+  }
+  .slide.active{
+    visibility:visible;
+    opacity:1;
+    pointer-events:auto;
+    z-index:10;
+  }
+  .deck{position:relative;}
+
+  .scaler{
+    transform-origin:center center;
+  }
+
+  /* ===== Shared type system ===== */
+  .eyebrow{
+    font-family:'SF Mono', 'Roboto Mono', 'Courier New', monospace;
+    font-size:15px;
+    letter-spacing:0.22em;
+    text-transform:uppercase;
+    color:var(--gold);
+    font-weight:500;
+  }
+  h1.display{
+    font-family:-apple-system, 'Helvetica Neue', Arial, sans-serif;
+    font-weight:800;
+    letter-spacing:-0.01em;
+    color:var(--black);
+    line-height:0.98;
+  }
+  .rule{
+    height:1px;
+    background:var(--line-dark);
+    width:100%;
+  }
+
+  /* keypad index — the signature device. each slide is "keyed in" */
+  .keypad-index{
+    position:absolute;
+    top:64px;
+    right:80px;
+    display:grid;
+    grid-template-columns:repeat(3, 30px);
+    grid-template-rows:repeat(3, 30px);
+    gap:6px;
+    z-index:50;
+  }
+  .keypad-index .key{
+    width:30px;height:30px;
+    border:1px solid rgba(11,11,12,0.18);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'SF Mono', 'Roboto Mono', 'Courier New', monospace;
+    font-size:12px;
+    color:rgba(11,11,12,0.3);
+    border-radius:2px;
+  }
+  .keypad-index .key.lit{
+    background:var(--gold);
+    border-color:var(--gold);
+    color:var(--black);
+    font-weight:700;
+  }
+  .keypad-index.on-dark .key{
+    border-color:rgba(247,245,240,0.18);
+    color:rgba(247,245,240,0.32);
+  }
+  .keypad-index.on-dark .key.lit{
+    background:var(--gold);
+    color:var(--black);
+  }
+
+  .brand-mark{
+    position:absolute;
+    bottom:56px;
+    left:80px;
+    display:flex;
+    align-items:center;
+    gap:14px;
+    z-index:50;
+  }
+  .brand-mark .bolt{
+    width:20px;height:20px;
+    position:relative;
+  }
+  .brand-mark .bolt svg{width:100%;height:100%;}
+  .brand-mark span{
+    font-family:'SF Mono', 'Roboto Mono', 'Courier New', monospace;
+    font-size:13px;
+    letter-spacing:0.15em;
+    text-transform:uppercase;
+    color:var(--steel-dim);
+  }
+  .brand-mark.on-dark span{color:rgba(247,245,240,0.45);}
+
+  /* ============ SLIDE 1 — TITLE ============ */
+  .s1{
+    background:var(--black);
+    color:var(--bone);
+  }
+  .s1::before{
+    /* faint architectural roofline drawn in true vector, not a generic blob */
+    content:'';
+    position:absolute;
+    top:0; left:0; right:0; bottom:0;
+    background-image:
+      linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.4) 100%);
+    pointer-events:none;
+  }
+  .s1-roofline{
+    position:absolute;
+    top:0; left:0;
+    width:100%;
+    height:100%;
+    opacity:1;
+  }
+  .s1-grid{
+    position:relative;
+    z-index:2;
+    height:100%;
+    display:grid;
+    grid-template-rows:1fr auto auto 1fr auto;
+    padding:90px 100px 70px;
+  }
+  .s1-eyebrow-row{
+    display:flex;
+    align-items:center;
+    gap:16px;
+  }
+  .s1-eyebrow-row .dash{width:36px;height:1px;background:var(--gold);}
+  .s1 h1{
+    color:var(--bone);
+    font-size:108px;
+    margin-top:28px;
+    max-width:1500px;
+  }
+  .s1 h1 em{
+    font-style:normal;
+    color:var(--gold);
+  }
+  .s1-sub{
+    margin-top:34px;
+    font-size:24px;
+    color:rgba(247,245,240,0.6);
+    max-width:760px;
+    font-weight:400;
+    line-height:1.5;
+  }
+  .s1-footer-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    border-top:1px solid var(--line);
+    padding-top:28px;
+  }
+  .s1-footer-row .audience{
+    font-family:'SF Mono', 'Roboto Mono', 'Courier New', monospace;
+    font-size:14px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--steel);
+  }
+  .s1-footer-row .audience b{color:var(--gold-soft);}
+
+  /* ============ SLIDE 2 — PROBLEM ============ */
+  .s2{
+    background:var(--bone);
+    display:grid;
+    grid-template-columns:560px 1fr;
+    height:100%;
+  }
+  .s2-left{
+    background:var(--black);
+    color:var(--bone);
+    padding:90px 70px 70px;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+  }
+  .s2-left h1{
+    color:var(--bone);
+    font-size:56px;
+    margin-top:30px;
+  }
+  .s2-left .lede{
+    margin-top:28px;
+    font-size:18px;
+    line-height:1.6;
+    color:rgba(247,245,240,0.55);
+    max-width:380px;
+  }
+  .s2-right{
+    padding:90px 90px 70px 70px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+  }
+  .cost-row{
+    display:grid;
+    grid-template-columns:64px 1fr;
+    border-top:1px solid var(--line-dark);
+    padding:26px 0;
+    align-items:start;
+    gap:28px;
+  }
+  .cost-row:first-of-type{border-top:1px solid var(--line-dark);}
+  .cost-row .tag{
+    font-family:'SF Mono', 'Roboto Mono', 'Courier New', monospace;
+    font-size:14px;
+    color:var(--gold);
+    font-weight:600;
+    padding-top:4px;
+  }
+  .cost-row h3{
+    font-family:-apple-system, 'Helvetica Neue', Arial, sans-serif;
+    font-size:23px;
+    font-weight:700;
+    color:var(--black);
+    margin-bottom:6px;
+  }
+  .cost-row p{
+    font-size:16px;
+    color:var(--steel-dim);
+    line-height:1.5;
+    max-width:560px;
+  }
+  .cost-list{border-bottom:1px solid var(--line-dark);}
+
+  /* ============ SLIDE 3 — SOLUTION ============ */
+  .s3{
+    background:var(--bone);
+    padding:90px 100px 70px;
+    display:flex;
+    flex-direction:column;
+  }
+  .s3-head{max-width:1100px;}
+  .s3 h1{font-size:60px; margin-top:26px;}
+  .s3-body{
+    flex:1;
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    gap:0;
+    margin-top:64px;
+    border-top:1px solid var(--line-dark);
+    border-bottom:1px solid var(--line-dark);
+  }
+  .s3-col{
+    padding:48px 44px 0;
+    border-right:1px solid var(--line-dark);
+    position:relative;
+  }
+  .s3-col:last-child{border-right:none;}
+  .s3-col .num{
+    font-family:'SF Mono', 'Roboto Mono', 'Courier New', monospace;
+    font-size:14px;
+    color:var(--steel);
+  }
+  .s3-col h3{
+    font-family:-apple-system, 'Helvetica Neue', Arial, sans-serif;
+    font-weight:800;
+    font-size:30px;
+    color:var(--black);
+    margin-top:18px;
+    line-height:1.1;
+  }
+  .s3-col p{
+    margin-top:16px;
+    font-size:16px;
+    color:var(--steel-dim);
+    line-height:1.6;
+    max-width:320px;
+  }
+  .s3-glyph{
+    margin-top:36px;
+    width:64px;height:64px;
+  }
+
+  /* ============ SLIDE 4 — FEATURES ============ */
+  .s4{
+    background:var(--black);
+    color:var(--bone);
+    padding:90px 100px 70px;
+    display:flex;
+    flex-direction:column;
+  }
+  .s4 h1{color:var(--bone); font-size:58px; margin-top:26px;}
+  .s4-grid{
+    flex:1;
+    margin-top:54px;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    grid-template-rows:1fr 1fr;
+    gap:1px;
+    background:var(--line);
+    border:1px solid var(--line);
+  }
+  .s4-cell{
+    background:var(--black);
+    padding:38px 46px;
+    display:flex;
+    flex-direction:column;
+  }
+  .s4-cell .code{
+    font-family:'SF Mono', 'Roboto Mono', 'Courier New', monospace;
+    font-size:13px;
+    color:var(--gold);
+    letter-spacing:0.08em;
+  }
+  .s4-cell h3{
+    font-family:-apple-system, 'Helvetica Neue', Arial, sans-serif;
+    font-weight:700;
+    font-size:25px;
+    margin-top:14px;
+    color:var(--bone);
+  }
+  .s4-cell ul{
+    margin-top:16px;
+    list-style:none;
+    font-size:15.5px;
+    color:rgba(247,245,240,0.55);
+    line-height:1.9;
+  }
+  .s4-cell li{padding-left:18px; position:relative;}
+  .s4-cell li::before{
+    content:'';
+    position:absolute;
+    left:0; top:10px;
+    width:7px;height:1px;
+    background:var(--gold);
+  }
+
+  /* ============ SLIDE 5 — APP ============ */
+  .s5{
+    background:var(--bone);
+    display:grid;
+    grid-template-columns:1fr 620px;
+    height:100%;
+  }
+  .s5-left{
+    padding:90px 80px 70px 100px;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+  }
+  .s5-left h1{font-size:54px; margin-top:26px; max-width:680px;}
+  .s5-list{margin-top:50px;}
+  .s5-row{
+    display:grid;
+    grid-template-columns:200px 1fr;
+    padding:18px 0;
+    border-top:1px solid var(--line-dark);
+    align-items:baseline;
+  }
+  .s5-row:last-child{border-bottom:1px solid var(--line-dark);}
+  .s5-row .k{
+    font-family:'SF Mono', 'Roboto Mono', 'Courier New', monospace;
+    font-size:14px;
+    color:var(--gold);
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+  }
+  .s5-row .v{font-size:17px; color:var(--black); font-weight:500;}
+  .s5-link{
+    margin-top:40px;
+    display:inline-flex;
+    align-items:center;
+    gap:12px;
+    font-family:'SF Mono', 'Roboto Mono', 'Courier New', monospace;
+    font-size:14px;
+    color:var(--black);
+    text-decoration:none;
+    border-bottom:1px solid var(--black);
+    padding-bottom:6px;
+    width:fit-content;
+  }
+  .s5-right{
+    background:var(--black);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+  }
+  .phone{
+    width:280px;
+    height:580px;
+    background:#111;
+    border-radius:34px;
+    border:2px solid #2a2a2a;
+    position:relative;
+    box-shadow:0 40px 80px rgba(0,0,0,0.5);
+    overflow:hidden;
+  }
+  .phone-notch{
+    position:absolute;
+    top:0; left:50%;
+    transform:translateX(-50%);
+    width:120px; height:22px;
+    background:#111;
+    border-radius:0 0 14px 14px;
+    z-index:5;
+  }
+  .phone-screen{
+    position:absolute;
+    inset:8px;
+    background:linear-gradient(180deg, #18181a 0%, #0c0c0d 100%);
+    border-radius:28px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding-top:64px;
+  }
+  .phone-screen .lock-label{
+    font-family:'SF Mono', 'Roboto Mono', 'Courier New', monospace;
+    font-size:11px;
+    letter-spacing:0.15em;
+    color:rgba(247,245,240,0.4);
+    text-transform:uppercase;
+  }
+  .phone-screen .unit{
+    font-family:-apple-system, 'Helvetica Neue', Arial, sans-serif;
+    font-size:20px;
+    color:var(--bone);
+    margin-top:8px;
+    font-weight:600;
+  }
+  .phone-keypad{
+    margin-top:44px;
+    display:grid;
+    grid-template-columns:repeat(3, 52px);
+    gap:14px;
+  }
+  .phone-keypad .pk{
+    width:52px;height:52px;
+    border-radius:50%;
+    border:1px solid rgba(247,245,240,0.15);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'SF Mono', 'Roboto Mono', 'Courier New', monospace;
+    color:rgba(247,245,240,0.7);
+    font-size:18px;
+  }
+  .phone-keypad .pk.active{
+    background:var(--gold);
+    border-color:var(--gold);
+    color:var(--black);
+    font-weight:700;
+  }
+  .phone-status{
+    margin-top:36px;
+    font-family:'SF Mono', 'Roboto Mono', 'Courier New', monospace;
+    font-size:12px;
+    color:var(--gold);
+    letter-spacing:0.1em;
+  }
+
+  /* ============ SLIDE 6 — BENEFITS LEDGER ============ */
+  .s6{
+    background:var(--bone);
+    padding:90px 100px 60px;
+    display:flex;
+    flex-direction:column;
+  }
+  .s6 h1{font-size:58px; margin-top:26px;}
+  .s6-ledger{
+    flex:1;
+    margin-top:46px;
+    display:flex;
+    flex-direction:column;
+  }
+  .ledger-row{
+    display:grid;
+    grid-template-columns:340px 1fr 200px;
+    align-items:center;
+    padding:21px 0;
+    border-top:1px solid var(--line-dark);
+    gap:30px;
+  }
+  .s6-ledger .ledger-row:last-child{border-bottom:1px solid var(--line-dark);}
+  .ledger-row .name{
+    font-family:-apple-system, 'Helvetica Neue', Arial, sans-serif;
+    font-weight:700;
+    font-size:21px;
+    color:var(--black);
+  }
+  .ledger-row .desc{
+    font-size:15.5px;
+    color:var(--steel-dim);
+    line-height:1.5;
+  }
+  .ledger-row .metric{
+    font-family:'SF Mono', 'Roboto Mono', 'Courier New', monospace;
+    font-size:14px;
+    color:var(--gold);
+    text-align:right;
+    font-weight:600;
+    letter-spacing:0.02em;
+  }
+
+  /* ============ SLIDE 7 — INSTALL TIMELINE ============ */
+  .s7{
+    background:var(--black);
+    color:var(--bone);
+    padding:90px 100px 70px;
+    display:flex;
+    flex-direction:column;
+  }
+  .s7 h1{color:var(--bone); font-size:58px; margin-top:26px;}
+  .s7-track{
+    flex:1;
+    margin-top:60px;
+    position:relative;
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    gap:0;
+  }
+  .s7-track::before{
+    content:'';
+    position:absolute;
+    top:14px; left:0; right:0;
+    height:1px;
+    background:var(--line);
+  }
+  .s7-phase{
+    padding:0 40px 0 0;
+    position:relative;
+  }
+  .s7-phase:not(:last-child){border-right:1px solid var(--line);}
+  .s7-phase .dot{
+    width:28px; height:28px;
+    border-radius:50%;
+    background:var(--gold);
+    color:var(--black);
+    font-family:'SF Mono', 'Roboto Mono', 'Courier New', monospace;
+    font-weight:700;
+    font-size:13px;
+    display:flex;align-items:center;justify-content:center;
+    margin-bottom:30px;
+    margin-left:0;
+  }
+  .s7-phase h3{
+    font-family:-apple-system, 'Helvetica Neue', Arial, sans-serif;
+    font-weight:700;
+    font-size:25px;
+    margin-bottom:18px;
+  }
+  .s7-phase ul{
+    list-style:none;
+    font-size:15.5px;
+    color:rgba(247,245,240,0.55);
+    line-height:1.85;
+  }
+  .s7-phase li{padding-left:16px;position:relative;}
+  .s7-phase li::before{
+    content:'';
+    position:absolute;left:0;top:11px;
+    width:6px;height:1px;background:var(--gold);
+  }
+  .s7-banner{
+    margin-top:50px;
+    border-top:1px solid var(--line);
+    padding-top:28px;
+    display:flex;
+    align-items:baseline;
+    gap:18px;
+  }
+  .s7-banner .mark{color:var(--gold); font-family:'JetBrains Mono',monospace; font-size:14px;}
+  .s7-banner p{font-size:17px; color:rgba(247,245,240,0.75); max-width:1100px;}
+
+  /* ============ SLIDE 8 — NEXT STEPS ============ */
+  .s8{
+    background:var(--bone);
+    padding:90px 100px 70px;
+    display:flex;
+    flex-direction:column;
+  }
+  .s8 h1{font-size:58px; margin-top:26px;}
+  .s8-grid{
+    flex:1;
+    margin-top:54px;
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    border-top:1px solid var(--line-dark);
+    border-left:1px solid var(--line-dark);
+  }
+  .s8-step{
+    border-right:1px solid var(--line-dark);
+    border-bottom:1px solid var(--line-dark);
+    padding:42px 40px;
+    display:flex;
+    flex-direction:column;
+  }
+  .s8-step .step-tag{
+    font-family:'SF Mono', 'Roboto Mono', 'Courier New', monospace;
+    font-size:13px;
+    color:var(--gold);
+    letter-spacing:0.1em;
+  }
+  .s8-step h3{
+    font-family:-apple-system, 'Helvetica Neue', Arial, sans-serif;
+    font-weight:800;
+    font-size:27px;
+    color:var(--black);
+    margin-top:16px;
+    margin-bottom:18px;
+  }
+  .s8-step ul{
+    list-style:none;
+    font-size:15.5px;
+    color:var(--steel-dim);
+    line-height:1.85;
+  }
+  .s8-step li{padding-left:16px; position:relative;}
+  .s8-step li::before{
+    content:'';
+    position:absolute;left:0;top:10px;
+    width:6px;height:1px;background:var(--black);
+    opacity:0.4;
+  }
+  .s8-cta{
+    margin-top:44px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .s8-cta-btn{
+    background:var(--black);
+    color:var(--bone);
+    font-family:-apple-system, 'Helvetica Neue', Arial, sans-serif;
+    font-weight:700;
+    font-size:17px;
+    padding:20px 38px;
+    border:none;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:14px;
+  }
+  .s8-cta-btn .arrow{color:var(--gold);}
+  .s8-cta-note{
+    font-family:'SF Mono', 'Roboto Mono', 'Courier New', monospace;
+    font-size:13px;
+    color:var(--steel);
+  }
+
+  /* ============ SLIDE 9 — CLOSE ============ */
+  .s9{
+    background:var(--black);
+    color:var(--bone);
+    padding:90px 100px 70px;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+  }
+  .s9-top{display:flex; flex-direction:column;}
+  .s9 h1{
+    color:var(--bone);
+    font-size:96px;
+    margin-top:30px;
+    max-width:1400px;
+  }
+  .s9 h1 em{font-style:normal; color:var(--gold);}
+  .s9-contact{
+    border-top:1px solid var(--line);
+    padding-top:36px;
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr 1fr;
+    gap:40px;
+  }
+  .s9-contact .block .k{
+    font-family:'SF Mono', 'Roboto Mono', 'Courier New', monospace;
+    font-size:12px;
+    letter-spacing:0.15em;
+    text-transform:uppercase;
+    color:var(--steel);
+  }
+  .s9-contact .block .v{
+    margin-top:10px;
+    font-size:19px;
+    color:var(--bone);
+    font-weight:500;
+  }
+  .s9-contact .block .v a{color:var(--gold-soft); text-decoration:none;}
+
+  /* ===== Nav ===== */
+  .nav{
+    position:fixed;
+    bottom:28px;
+    right:36px;
+    display:flex;
+    gap:10px;
+    z-index:1000;
+  }
+  .nav button{
+    width:42px;height:42px;
+    border-radius:50%;
+    border:1px solid rgba(0,0,0,0.15);
+    background:rgba(255,255,255,0.9);
+    cursor:pointer;
+    font-size:16px;
+    display:flex;align-items:center;justify-content:center;
+    transition:all .2s ease;
+  }
+  .nav button:hover{background:var(--gold); border-color:var(--gold);}
+  .counter{
+    position:fixed;
+    bottom:34px;
+    left:36px;
+    font-family:'SF Mono', 'Roboto Mono', 'Courier New', monospace;
+    font-size:13px;
+    color:rgba(255,255,255,0.6);
+    z-index:1000;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck" id="deck">
+
+  <!-- ============ SLIDE 1 ============ -->
+  <div class="slide s1 active">
+    <svg class="s1-roofline" viewBox="0 0 1920 1080" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <polyline points="0,420 480,160 960,420" fill="none" stroke="rgba(201,168,76,0.5)" stroke-width="2"/>
+      <polyline points="960,420 1440,160 1920,420" fill="none" stroke="rgba(201,168,76,0.18)" stroke-width="2"/>
+      <rect x="430" y="260" width="60" height="60" fill="none" stroke="rgba(201,168,76,0.45)" stroke-width="2"/>
+      <line x1="460" y1="260" x2="460" y2="320" stroke="rgba(201,168,76,0.45)" stroke-width="2"/>
+      <line x1="430" y1="290" x2="490" y2="290" stroke="rgba(201,168,76,0.45)" stroke-width="2"/>
+    </svg>
+    <div class="keypad-index on-dark" id="kp-1"></div>
+    <div class="s1-grid">
+      <div></div>
+      <div class="s1-eyebrow-row">
+        <div class="dash"></div>
+        <span class="eyebrow">Property access · reconsidered</span>
+      </div>
+      <h1 class="display">Replace the key.<br>Not the keyholder.</h1>
+      <div></div>
+      <div class="s1-footer-row">
+        <p class="s1-sub">A keyless access system built for portfolios, not single doors — personalized codes, scheduled access, and a full record of who came through, and when.</p>
+        <div class="audience">Prepared for <b>Property Management</b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 2 — THE PROBLEM ============ -->
+  <div class="slide s2">
+    <div class="keypad-index on-dark" id="kp-2"></div>
+    <div class="s2-left">
+      <div>
+        <span class="eyebrow">01 — The standing cost</span>
+        <h1 class="display">What a<br>metal key<br>still costs you.</h1>
+      </div>
+      <p class="lede">Every cut key is a liability with no record attached to it. The cost shows up later — in calls, in callbacks, in disputes you can't settle with evidence.</p>
+    </div>
+    <div class="s2-right">
+      <div class="cost-list">
+        <div class="cost-row">
+          <div class="tag">01</div>
+          <div>
+            <h3>The after-hours lockout call</h3>
+            <p>A resident without a key becomes a maintenance team's problem at the worst possible hour.</p>
+          </div>
+        </div>
+        <div class="cost-row">
+          <div class="tag">02</div>
+          <div>
+            <h3>The full rekey, every turnover</h3>
+            <p>One unreturned key means changing the cylinder — and trusting that's the only copy that exists.</p>
+          </div>
+        </div>
+        <div class="cost-row">
+          <div class="tag">03</div>
+          <div>
+            <h3>No record of who was at the door</h3>
+            <p>When something goes wrong, there's nothing to check — no timestamp, no name, no way to know.</p>
+          </div>
+        </div>
+        <div class="cost-row">
+          <div class="tag">04</div>
+          <div>
+            <h3>Staff time spent on access, not property</h3>
+            <p>Hours go to letting people in and out — time that should go toward the building itself.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 3 — SOLUTION ============ -->
+  <div class="slide s3">
+    <div class="keypad-index" id="kp-3"></div>
+    <div class="s3-head">
+      <span class="eyebrow">02 — The shift</span>
+      <h1 class="display">One system. Every door.<br>Nobody carries a key.</h1>
+    </div>
+    <div class="s3-body">
+      <div class="s3-col">
+        <div class="num">A</div>
+        <svg class="s3-glyph" viewBox="0 0 64 64" fill="none"><rect x="8" y="20" width="48" height="34" rx="3" stroke="#0B0B0C" stroke-width="2"/><circle cx="32" cy="37" r="4" fill="#C9A84C"/><path d="M22 20V14a10 10 0 0120 0v6" stroke="#0B0B0C" stroke-width="2"/></svg>
+        <h3>Access, issued<br>like a permission</h3>
+        <p>Each resident, vendor, or staff member gets their own code — not a copy of someone else's key.</p>
+      </div>
+      <div class="s3-col">
+        <div class="num">B</div>
+        <svg class="s3-glyph" viewBox="0 0 64 64" fill="none"><rect x="10" y="8" width="44" height="48" rx="4" stroke="#0B0B0C" stroke-width="2"/><line x1="18" y1="20" x2="46" y2="20" stroke="#C9A84C" stroke-width="2"/><line x1="18" y1="30" x2="46" y2="30" stroke="#0B0B0C" stroke-width="2" opacity="0.4"/><line x1="18" y1="40" x2="38" y2="40" stroke="#0B0B0C" stroke-width="2" opacity="0.4"/></svg>
+        <h3>One dashboard,<br>every property</h3>
+        <p>Grant, schedule, or revoke access for one door or a hundred — all from a single screen.</p>
+      </div>
+      <div class="s3-col">
+        <div class="num">C</div>
+        <svg class="s3-glyph" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="24" stroke="#0B0B0C" stroke-width="2"/><path d="M32 18v14l10 6" stroke="#C9A84C" stroke-width="2.5" stroke-linecap="round"/></svg>
+        <h3>A record for<br>every entry</h3>
+        <p>Every attempt — successful or not — is logged with a name, a door, and a time.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 4 — FEATURES ============ -->
+  <div class="slide s4">
+    <div class="keypad-index on-dark" id="kp-4"></div>
+    <span class="eyebrow">03 — Built for the portfolio, not the door</span>
+    <h1 class="display">What administrators<br>actually control</h1>
+    <div class="s4-grid">
+      <div class="s4-cell">
+        <div class="code">FEATURE — ENTRY CODES</div>
+        <h3>Personalized entry codes</h3>
+        <ul>
+          <li>One code per person — never shared, never duplicated</li>
+          <li>Issued the moment a lease starts</li>
+          <li>Revoked the moment it ends — no rekey required</li>
+        </ul>
+      </div>
+      <div class="s4-cell">
+        <div class="code">FEATURE — SCHEDULED ACCESS</div>
+        <h3>Time-specific entry windows</h3>
+        <ul>
+          <li>Codes that only work within a set window</li>
+          <li>Built for contractors, inspectors, and one-time visits</li>
+          <li>Access expires on its own — nothing to remember to disable</li>
+        </ul>
+      </div>
+      <div class="s4-cell">
+        <div class="code">FEATURE — ADMINISTRATION</div>
+        <h3>Centralized administrator control</h3>
+        <ul>
+          <li>Every property, every door, in one place</li>
+          <li>Permission levels by role — site staff see only their site</li>
+          <li>Changes apply instantly, with no site visit needed</li>
+        </ul>
+      </div>
+      <div class="s4-cell">
+        <div class="code">FEATURE — ALERTS</div>
+        <h3>Unauthorized attempt alerts</h3>
+        <ul>
+          <li>Failed entries are flagged the moment they happen</li>
+          <li>Repeated attempts surface as a pattern, not a guess</li>
+          <li>A standing record for any dispute that follows</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 5 — APP ============ -->
+  <div class="slide s5">
+    <div class="keypad-index" id="kp-5"></div>
+    <div class="s5-left">
+      <div>
+        <span class="eyebrow">04 — The resident's side</span>
+        <h1 class="display">Their door.<br>Their phone.<br>No spare key.</h1>
+      </div>
+      <div class="s5-list">
+        <div class="s5-row"><div class="k">Unlock by</div><div class="v">Fingerprint, PIN, or phone</div></div>
+        <div class="s5-row"><div class="k">Platform</div><div class="v">Tuya Smart Life — free, no subscription</div></div>
+        <div class="s5-row"><div class="k">Connection</div><div class="v">Wi-Fi with Bluetooth fallback — works if the network doesn't</div></div>
+        <div class="s5-row"><div class="k">Languages</div><div class="v">17, out of the box</div></div>
+      </div>
+      <a class="s5-link" href="https://play.google.com/store/apps/details?id=com.tuya.smartlife" target="_blank">↳ Smart Life on Google Play</a>
+    </div>
+    <div class="s5-right">
+      <div class="phone">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <div class="lock-label">Front Door · Unit 4B</div>
+          <div class="unit">Tuya Smart Life</div>
+          <div class="phone-keypad">
+            <div class="pk">1</div><div class="pk">2</div><div class="pk">3</div>
+            <div class="pk">4</div><div class="pk active">5</div><div class="pk">6</div>
+            <div class="pk">7</div><div class="pk">8</div><div class="pk">9</div>
+          </div>
+          <div class="phone-status">● UNLOCKED — 8:41 AM</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 6 — BENEFITS LEDGER ============ -->
+  <div class="slide s6">
+    <div class="keypad-index" id="kp-6"></div>
+    <span class="eyebrow">05 — What changes, operationally</span>
+    <h1 class="display">The work this<br>removes from your team</h1>
+    <div class="s6-ledger">
+      <div class="ledger-row">
+        <div class="name">No more lockout calls</div>
+        <div class="desc">Residents reset their own access — staff are never the backup plan for a forgotten key.</div>
+        <div class="metric">0 AFTER-HOURS CALLS</div>
+      </div>
+      <div class="ledger-row">
+        <div class="name">No more rekeying</div>
+        <div class="desc">A new tenant means a new code, not a new cylinder, locksmith, or invoice.</div>
+        <div class="metric">0 LOCKSMITH VISITS</div>
+      </div>
+      <div class="ledger-row">
+        <div class="name">No more maintenance lockouts</div>
+        <div class="desc">Staff carry scheduled access, not a master key that can be lost or copied.</div>
+        <div class="metric">TIME-BOXED ACCESS</div>
+      </div>
+      <div class="ledger-row">
+        <div class="name">No more unverifiable occupants</div>
+        <div class="desc">Access ends the day a lease does — no lingering key, no unknown copy in circulation.</div>
+        <div class="metric">INSTANT REVOCATION</div>
+      </div>
+      <div class="ledger-row">
+        <div class="name">No more disputes without evidence</div>
+        <div class="desc">Every entry is timestamped and attributed — the record speaks before anyone has to.</div>
+        <div class="metric">FULL ENTRY LOG</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 7 — INSTALL ============ -->
+  <div class="slide s7">
+    <div class="keypad-index on-dark" id="kp-7"></div>
+    <span class="eyebrow">06 — Getting from here to installed</span>
+    <h1 class="display">Installation doesn't<br>pull anyone off task</h1>
+    <div class="s7-track">
+      <div class="s7-phase">
+        <div class="dot">1</div>
+        <h3>Walkthrough</h3>
+        <ul>
+          <li>Every door and lock type is assessed on site</li>
+          <li>Hardware is matched to each door, not standardized blindly</li>
+          <li>Work begins as soon as you're ready — no queue to wait on</li>
+        </ul>
+      </div>
+      <div class="s7-phase">
+        <div class="dot">2</div>
+        <h3>Installation</h3>
+        <ul>
+          <li>Licensed technicians handle every door</li>
+          <li>Existing hardware is removed cleanly, frame untouched</li>
+          <li>Your team isn't on call for any part of it</li>
+        </ul>
+      </div>
+      <div class="s7-phase">
+        <div class="dot">3</div>
+        <h3>Handover</h3>
+        <ul>
+          <li>Administrators are walked through the dashboard directly</li>
+          <li>Residents are onboarded to the app in minutes, not days</li>
+          <li>Support stays reachable well past install day</li>
+        </ul>
+      </div>
+    </div>
+    <div class="s7-banner">
+      <span class="mark">→</span>
+      <p>Maintenance staff keep doing exactly what they do now. What disappears is the work that was never really maintenance to begin with — lockouts, rekeys, and key handoffs.</p>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 8 — NEXT STEPS ============ -->
+  <div class="slide s8">
+    <div class="keypad-index" id="kp-8"></div>
+    <span class="eyebrow">07 — Where this goes next</span>
+    <h1 class="display">Three steps from<br>here to live doors</h1>
+    <div class="s8-grid">
+      <div class="s8-step">
+        <div class="step-tag">STEP 01</div>
+        <h3>See it run</h3>
+        <ul>
+          <li>A live walkthrough of the administrator dashboard</li>
+          <li>The resident app, on an actual phone</li>
+          <li>Direct answers to your specific buildings</li>
+        </ul>
+      </div>
+      <div class="s8-step">
+        <div class="step-tag">STEP 02</div>
+        <h3>Run a pilot</h3>
+        <ul>
+          <li>Start with one property, or even one building</li>
+          <li>Measure the actual change in staff time and calls</li>
+          <li>Your team trained on the system, not just told about it</li>
+        </ul>
+      </div>
+      <div class="s8-step">
+        <div class="step-tag">STEP 03</div>
+        <h3>Roll out the portfolio</h3>
+        <ul>
+          <li>Expand at the pace that fits your operation</li>
+          <li>One point of contact across every property</li>
+          <li>Support that doesn't end at installation</li>
+        </ul>
+      </div>
+    </div>
+    <div class="s8-cta">
+      <button class="s8-cta-btn">Schedule a walkthrough <span class="arrow">→</span></button>
+      <div class="s8-cta-note">No commitment required to see it run.</div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 9 — CLOSE ============ -->
+  <div class="slide s9">
+    <div class="keypad-index on-dark" id="kp-9"></div>
+    <div class="s9-top">
+      <span class="eyebrow">Keyless Security</span>
+      <h1 class="display">Let's get<br>your doors <em>keyed in.</em></h1>
+    </div>
+    <div class="s9-contact">
+      <div class="block">
+        <div class="k">Email</div>
+        <div class="v"><a href="mailto:contact@kslocks.com">contact@kslocks.com</a></div>
+      </div>
+      <div class="block">
+        <div class="k">Phone</div>
+        <div class="v">Available on request</div>
+      </div>
+      <div class="block">
+        <div class="k">Site</div>
+        <div class="v"><a href="https://kslocks.com">kslocks.com</a></div>
+      </div>
+      <div class="block">
+        <div class="k">Based in</div>
+        <div class="v">Chicago, Illinois</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="counter" id="counter">01 / 09</div>
+<div class="nav">
+  <button onclick="prevSlide()">←</button>
+  <button onclick="nextSlide()">→</button>
+</div>
+
+<script>
+  // build keypad index widgets: 9 slides => light key N
+  const slides = document.querySelectorAll('.slide');
+  const total = slides.length;
+  let idx = 0;
+
+  function buildKeypad(container, litNumber){
+    container.innerHTML = '';
+    for(let i=1;i<=9;i++){
+      const k = document.createElement('div');
+      k.className = 'key' + (i===litNumber ? ' lit':'');
+      k.textContent = i;
+      container.appendChild(k);
+    }
+  }
+  document.querySelectorAll('.keypad-index').forEach((el,i)=>{
+    buildKeypad(el, i+1);
+  });
+
+  function render(){
+    slides.forEach((s,i)=>s.classList.toggle('active', i===idx));
+    document.getElementById('counter').textContent =
+      String(idx+1).padStart(2,'0') + ' / ' + String(total).padStart(2,'0');
+  }
+  function nextSlide(){ idx = (idx+1)%total; render(); }
+  function prevSlide(){ idx = (idx-1+total)%total; render(); }
+
+  document.addEventListener('keydown', e=>{
+    if(e.key==='ArrowRight' || e.key===' ') nextSlide();
+    if(e.key==='ArrowLeft') prevSlide();
+  });
+
+  // scale-to-fit
+  function scaleToFit(){
+    const deck = document.getElementById('deck');
+    const scale = Math.min(window.innerWidth/1920, window.innerHeight/1080);
+    document.querySelectorAll('.slide').forEach(s=>{
+      s.style.transform = `scale(${scale})`;
+    });
+  }
+  window.addEventListener('resize', scaleToFit);
+  scaleToFit();
+
+  document.getElementById('deck').addEventListener('click', e=>{
+    if(e.target.closest('button')) return;
+    const half = window.innerWidth/2;
+    if(e.clientX > half) nextSlide(); else prevSlide();
+  });
+</script>
+</body>
+</html>
