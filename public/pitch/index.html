@@ -45,7 +45,7 @@
     height:1080px;
     flex-shrink:0;
     position:absolute;
-    top:0; left:0;
+    top:50%; left:50%;
     background:var(--bone);
     overflow:hidden;
     transform-origin:center center;
@@ -1126,10 +1126,9 @@
 
   // scale-to-fit
   function scaleToFit(){
-    const deck = document.getElementById('deck');
     const scale = Math.min(window.innerWidth/1920, window.innerHeight/1080);
     document.querySelectorAll('.slide').forEach(s=>{
-      s.style.transform = `scale(${scale})`;
+      s.style.transform = `translate(-50%, -50%) scale(${scale})`;
     });
   }
   window.addEventListener('resize', scaleToFit);
